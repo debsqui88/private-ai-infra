@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: pip install ruff pytest
+
+      - name: Ruff lint
+        run: ruff check src tests
+
+      - name: Shell script syntax
+        run: |
+          for f in scripts/*.sh agents/wrappers/*.sh tests/integration/*.sh; do
+            echo "bash -n $f"
+            bash -n "$f"
+          done
+
+      - name: Unit tests
+        # MLX-dependent tests auto-skip off Apple Silicon (importorskip).
+        run: pytest

@@ -1,0 +1,37 @@
+# Local runtime and private state
+venv/
+model_cache/
+logs/
+backups/
+tmp/
+certs/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Python and OS noise
+__pycache__/
+*.pyc
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+
+# Local editor state
+.vscode/
+.idea/
+.claude/
+
+# Backups, build artifacts, vendored tool state
+*.bak
+*.bak.*
+node_modules/
+dist/
+*.egg-info/
+agents/opencode_runtime/

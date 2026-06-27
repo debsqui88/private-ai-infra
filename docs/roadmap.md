@@ -4,17 +4,20 @@ The value of this project is not that a model can run locally — it is the cont
 boundary around it. The roadmap reflects that: harden the boundary first, broaden
 capability second.
 
-## Near-term — harden the boundary
+## Done — boundary hardening
 
-These close the gaps named in [security-model.md](security-model.md):
+- **Fail-closed auth** — the gateway refuses to start without `PRIVATE_AI_AUTH_TOKEN`,
+  compares the bearer token in constant time, and no longer logs the `Authorization`
+  header.
+- **Request-size limit** — `MAX_CONTENT_LENGTH` bounds the input side.
+- **Security-path tests** — auth pass/fail, empty-token-denies-all, and the size limit
+  are covered by `tests/unit/test_auth.py`.
 
-- **Fail-closed auth** — refuse to start without `PRIVATE_AI_AUTH_TOKEN` set; use a
-  constant-time comparison; stop logging the `Authorization` header on auth failure.
-- **Request-size limit** — set `MAX_CONTENT_LENGTH` so the input side is bounded, not
-  just output tokens.
-- **Rate limiting** on the gateway.
-- **Test coverage on security paths** — auth pass/fail, alias routing, token clamping,
-  and the tool-call-block fallback (today only the sanitizer is covered).
+## Near-term — remaining hardening
+
+- **Rate limiting** — a per-client request-rate cap (only body size and output tokens
+  are bounded today).
+- **More security-path coverage** — alias routing and the tool-call-block fallback.
 
 ## Medium-term — observability and packaging
 

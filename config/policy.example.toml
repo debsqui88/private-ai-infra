@@ -1,0 +1,23 @@
+# AI governance policy — defines principals (API-key identities) and what each may do.
+#
+# Copy to config/policy.toml (gitignored) and fill in real values. API keys are
+# NEVER stored here in plaintext: store the SHA-256 hash of each key. Generate one:
+#
+#   printf '%s' 'your-api-key' | shasum -a 256
+#
+# If config/policy.toml is absent, the gateway runs in single-principal mode using
+# PRIVATE_AI_AUTH_TOKEN (treated as an owner key allowed to use every model) — see
+# .env.example. When a policy file IS present, the owner token still works as a
+# break-glass admin identity, alongside the principals defined below.
+
+[[principals]]
+name = "analyst"
+key_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+allowed_models = ["strategy", "engineering"]
+max_output_tokens = 2048
+
+[[principals]]
+name = "offsec-lead"
+key_sha256 = "1111111111111111111111111111111111111111111111111111111111111111"
+allowed_models = ["strategy", "engineering", "offsec"]
+max_output_tokens = 4096

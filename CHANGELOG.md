@@ -4,6 +4,30 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-27
+
+### Added
+- **Governance plane (policy-as-code).** Externalized policy (`config/policy.toml`, TOML via
+  stdlib `tomllib`) defining principals (API-key identities). Keys are stored as SHA-256
+  hashes, never plaintext.
+- **Identity + authorization.** Each request is resolved to a principal; the requested model
+  alias is authorized against that principal's allowlist (403 on denial), and the effective
+  output-token cap is the tightest of request / per-model / per-principal limits.
+- **Structured decision audit** (`logs/decisions.jsonl`): one JSON record per authorization
+  decision (request_id, principal, model, allow/deny, reason, status) for SIEM ingestion.
+- Tests for the policy layer and authz paths (suite 4 → 17).
+
+### Changed
+- Gateway now launches as a module (`python -m private_ai_gateway.app`) for clean
+  intra-package imports; start/stop scripts updated accordingly.
+- Single static token mode is preserved as an "owner" break-glass principal when no policy
+  file is present (zero-config local development).
+
+### Security
+- Fail-closed auth (refuses to start without `PRIVATE_AI_AUTH_TOKEN`), constant-time bearer
+  comparison, Authorization header no longer logged, and a request-body size limit
+  (`MAX_CONTENT_LENGTH`).
+
 ## [0.1.0] - 2026-06-27
 
 ### Added

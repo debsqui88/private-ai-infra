@@ -10,6 +10,7 @@ certs/
 .env
 .env.*
 !.env.example
+config/policy.toml
 *.pem
 *.key
 *.crt

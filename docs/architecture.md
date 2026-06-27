@@ -28,13 +28,18 @@ Control plane
   - planning, review, drafting — text only
   - no trusted tool execution through the gateway
 
+Governance plane  (src/private_ai_gateway/policy.py + audit.py)
+  - policy-as-code: principals (API-key identities) from config/policy.toml
+  - identity (token -> principal) and authorization (model allowlist, token caps)
+  - structured decision audit (logs/decisions.jsonl)
+
 Gateway layer  (src/private_ai_gateway/app.py + deploy/nginx)
   - nginx loopback boundary (127.0.0.1 only)
   - Flask OpenAI-compatible API
-  - bearer auth
+  - fail-closed bearer auth (constant-time)
   - alias-based model routing
   - output sanitization (thinking / tool / control markers)
-  - per-request max-token clamp
+  - per-request / per-principal max-token clamp
   - audit logging
 
 Operator wrappers  (agents/wrappers/, owner-run only)
@@ -74,6 +79,25 @@ The alias table is the single source of truth in `ROUTE_MAP`
 - All requests audit-logged.
 
 See [security-model.md](security-model.md) for the trust boundaries and known limits.
+
+## Governance plane
+
+Authorization is **policy-as-code**, not logic baked into the request handler. A TOML
+policy file (`config/policy.toml`, parsed with stdlib `tomllib`) defines principals:
+
+- **Identity** — each principal is keyed by the **SHA-256 hash** of its API key; keys are
+  never stored in plaintext. The gateway hashes the presented bearer token to resolve the
+  principal (`policy.py`).
+- **Authorization** — each principal carries an `allowed_models` list and an optional
+  `max_output_tokens` cap. A request for a model outside the allowlist returns `403`;
+  governance can only *tighten* token caps, never loosen them.
+- **Decision audit** — every allow/deny is appended as one JSON line to
+  `logs/decisions.jsonl` (`audit.py`) with a request id, principal, model, and reason —
+  designed for SIEM ingestion.
+
+If no policy file is present, the gateway runs single-principal using
+`PRIVATE_AI_AUTH_TOKEN` (an owner identity allowed every model), so local development is
+zero-config. See `config/policy.example.toml`.
 
 ## Direction
 

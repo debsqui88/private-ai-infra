@@ -6,8 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-GATEWAY="src/private_ai_gateway/app.py"
+GATEWAY_MODULE="private_ai_gateway.app"
 NGINX_CONF="deploy/nginx/nginx.conf"
+export PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 
 # Load local config if present (12-factor); see .env.example.
 if [ -f .env ]; then
@@ -35,10 +36,10 @@ if [ -f logs/flask.pid ]; then
   fi
 fi
 
-pkill -f "$PROJECT_ROOT/$GATEWAY" 2>/dev/null || true
+pkill -f "$GATEWAY_MODULE" 2>/dev/null || true
 
 echo "Starting Flask gateway on 127.0.0.1:8080..."
-nohup python "$PROJECT_ROOT/$GATEWAY" \
+nohup python -m "$GATEWAY_MODULE" \
   > "$PROJECT_ROOT/logs/flask.stdout.log" \
   2> "$PROJECT_ROOT/logs/flask.stderr.log" &
 

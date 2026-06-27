@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-GATEWAY="src/private_ai_gateway/app.py"
+GATEWAY_MODULE="private_ai_gateway.app"
 NGINX_CONF="deploy/nginx/nginx.conf"
 
 echo "Stopping Nginx..."
@@ -20,6 +20,6 @@ if [ -f logs/flask.pid ]; then
   fi
 fi
 
-pkill -f "$PROJECT_ROOT/$GATEWAY" 2>/dev/null || true
+pkill -f "$GATEWAY_MODULE" 2>/dev/null || true
 
 echo "Stopped."

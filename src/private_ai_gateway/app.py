@@ -11,10 +11,14 @@ import logging
 import os
 import re
 import time
+import uuid
 
 import mlx.core as mx
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, g, jsonify, request
 from mlx_lm import generate, load
+
+from private_ai_gateway.audit import DecisionLog
+from private_ai_gateway.policy import Policy, Principal
 
 app = Flask(__name__)
 
@@ -37,6 +41,19 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 LOG_DIR = os.environ.get("PRIVATE_AI_LOG_DIR", os.path.join(_PROJECT_ROOT, "logs"))
 AUDIT_LOG_PATH = os.path.join(LOG_DIR, "audit.log")
 os.makedirs(LOG_DIR, exist_ok=True)
+
+# -----------------------------
+# Governance: policy-as-code identity + authorization
+# -----------------------------
+POLICY_PATH = os.environ.get(
+    "PRIVATE_AI_POLICY_PATH", os.path.join(_PROJECT_ROOT, "config", "policy.toml")
+)
+POLICY = Policy.load(POLICY_PATH)
+DECISION_LOG = DecisionLog(os.path.join(LOG_DIR, "decisions.jsonl"))
+
+# The owner token (PRIVATE_AI_AUTH_TOKEN) maps to this break-glass admin identity,
+# permitted every model. Finer-grained restrictions come from POLICY principals.
+OWNER_PRINCIPAL = Principal("owner", frozenset({"*"}), None)
 
 ROUTE_MAP = {
     "strategy": "mlx-community/Qwen3.6-27B-OptiQ-4bit",
@@ -339,21 +356,48 @@ def estimate_tokens_rough(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+def _identify_principal(token: str) -> Principal | None:
+    """Resolve a bearer token to a principal: policy first, then owner fallback."""
+    principal = POLICY.identify(token)
+    if principal is not None:
+        return principal
+    # Owner / break-glass token. Constant-time compare; an empty configured token
+    # or an empty presented token never matches.
+    if (
+        AUTH_TOKEN
+        and token
+        and hmac.compare_digest(token.encode("utf-8"), AUTH_TOKEN.encode("utf-8"))
+    ):
+        return OWNER_PRINCIPAL
+    return None
+
+
 @app.before_request
 def authenticate_request():
+    g.request_id = uuid.uuid4().hex
+    g.principal = None
+
     # Allow health only without auth.
     if request.path in ("/health", "/v1/health"):
         return None
 
-    provided = request.headers.get("Authorization", "")
-    expected = f"Bearer {AUTH_TOKEN}"
+    header = request.headers.get("Authorization", "")
+    token = header[7:] if header.startswith("Bearer ") else ""
+    principal = _identify_principal(token)
 
-    # Constant-time comparison; an empty configured token denies all requests.
     # The Authorization header is never logged (it carries the bearer credential).
-    if not AUTH_TOKEN or not hmac.compare_digest(
-        provided.encode("utf-8"), expected.encode("utf-8")
-    ):
+    if principal is None:
         logger.warning(f"AUTH_FAILURE | IP={request.remote_addr} | Path={request.path}")
+        DECISION_LOG.record(
+            request_id=g.request_id,
+            principal=None,
+            method=request.method,
+            path=request.path,
+            model=None,
+            decision="deny",
+            reason="invalid_or_unknown_token",
+            status=401,
+        )
         return jsonify(
             {
                 "error": {
@@ -364,7 +408,11 @@ def authenticate_request():
             }
         ), 401
 
-    logger.info(f"AUTH_SUCCESS | IP={request.remote_addr} | Path={request.path}")
+    g.principal = principal
+    logger.info(
+        f"AUTH_SUCCESS | principal={principal.name} | "
+        f"IP={request.remote_addr} | Path={request.path}"
+    )
     return None
 
 
@@ -434,6 +482,35 @@ def chat_completions():
     requested_model = req_data.get("model", DEFAULT_MODEL_ALIAS)
     messages = req_data.get("messages", [])
 
+    # --- AUTHORIZATION: may this principal use the requested model? ---
+    principal = getattr(g, "principal", None) or OWNER_PRINCIPAL
+    if not principal.may_use(requested_model):
+        logger.warning(
+            f"AUTHZ_DENY | principal={principal.name} | model={requested_model}"
+        )
+        DECISION_LOG.record(
+            request_id=getattr(g, "request_id", ""),
+            principal=principal.name,
+            method=request.method,
+            path=request.path,
+            model=requested_model,
+            decision="deny",
+            reason="model_not_allowed",
+            status=403,
+        )
+        return jsonify(
+            {
+                "error": {
+                    "message": (
+                        f"Principal '{principal.name}' is not permitted to use "
+                        f"model '{requested_model}'"
+                    ),
+                    "type": "permission_error",
+                    "code": "model_not_allowed",
+                }
+            }
+        ), 403
+
     # --- TOOL SAFETY PREAMBLE INJECTED HERE ---
     if req_data.get("tools") or req_data.get("tool_choice"):
         messages = [
@@ -464,7 +541,13 @@ def chat_completions():
 
     requested_model_for_cap = str(req_data.get("model") or "strategy")
     model_cap = MODEL_OUTPUT_TOKEN_CAPS.get(requested_model_for_cap, DEFAULT_OUTPUT_TOKENS)
-    max_tokens = min(requested_max_tokens, model_cap)
+
+    # Effective cap is the tightest of: the request, the per-model cap, and the
+    # principal's policy cap (governance can only tighten, never loosen).
+    caps = [requested_max_tokens, model_cap]
+    if principal.max_output_tokens is not None:
+        caps.append(principal.max_output_tokens)
+    max_tokens = min(caps)
 
     if requested_max_tokens != max_tokens:
         logger.info(
@@ -546,6 +629,17 @@ def chat_completions():
         ), 500
 
     logger.info("INFERENCE_COMPLETE | Payload generated")
+
+    DECISION_LOG.record(
+        request_id=getattr(g, "request_id", ""),
+        principal=principal.name,
+        method=request.method,
+        path=request.path,
+        model=requested_model,
+        decision="allow",
+        reason="completed",
+        status=200,
+    )
 
     completion_tokens_rough = estimate_tokens_rough(response_text)
 

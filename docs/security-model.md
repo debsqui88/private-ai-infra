@@ -24,11 +24,13 @@ below.
 |---|---|---|
 | Network | bind to `127.0.0.1` only (Flask + nginx) | active |
 | Authentication | constant-time bearer check; fail-closed (won't start without a token) | active, see limits |
+| Identity | bearer token resolved to a principal via policy-as-code (API-key SHA-256 hashes) | active |
+| Authorization | per-principal model allowlist; unauthorized model → 403 | active |
 | Model output | sanitizer strips thinking / tool / control markers | active (defense-in-depth) |
 | Tool execution | not performed by the gateway; tool-call output blocked + text fallback | active |
 | Input volume | request body capped via `MAX_CONTENT_LENGTH` (default 8 MiB) | active |
-| Output volume | per-request `max_tokens` clamped to a per-model cap | active |
-| Observability | every request audit-logged (Authorization header never logged) | active |
+| Output volume | tightest of request / per-model / per-principal token cap | active |
+| Observability | text audit log + structured decision audit (`decisions.jsonl`); Authorization header never logged | active |
 | Operator wrappers | project-root jail, read-only inspection, monitoring-only ops | active |
 
 ## Risks addressed (OWASP LLM / MITRE ATLAS framing)
@@ -38,6 +40,10 @@ This gateway targets a focused subset rather than claiming broad coverage:
 - **LLM01 Prompt injection / LLM06 Excessive agency** — the gateway never grants the
   model execution authority; tool-call output is blocked, not forwarded. A compromised
   prompt cannot turn into an action through this path.
+- **Broken access control / least privilege** — identity and authorization are
+  policy-as-code: each API key maps to a principal constrained to specific model aliases
+  and token caps. A leaked low-privilege key cannot reach a model it was never granted,
+  and every allow/deny decision is recorded for audit.
 - **LLM02 Insecure output handling** — model output is sanitized before it reaches the
   client (thinking wrappers, fake tool calls, stray control tokens removed).
 - **Model denial-of-service (output)** — per-model output-token caps bound runaway
@@ -52,10 +58,10 @@ adversarial/agentic output and contains it at the boundary rather than trusting 
 
 Honesty about what is *not* yet hardened is part of the design:
 
-- **Authentication is a single static bearer token** (`PRIVATE_AI_AUTH_TOKEN`).
-  It is fail-closed (the gateway refuses to start without one) and compared in
-  constant time, but there is still no rotation and no per-client tokens. Treat it as a
-  loopback gate, not a public multi-client auth system.
+- **API keys are static** — identities come from a policy file of API-key hashes, but
+  there is no automatic key rotation or expiry yet, and the owner (`PRIVATE_AI_AUTH_TOKEN`)
+  token is an all-models break-glass identity. Treat this as a loopback governance gate,
+  not a public IdP-backed auth system.
 - **The output sanitizer is a regex denylist.** It is defense-in-depth for *known*
   marker shapes, not a guarantee against novel or obfuscated markers. Do not rely on it
   as a sole control.

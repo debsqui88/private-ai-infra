@@ -1,22 +1,24 @@
 # Private AI Gateway
 
-A local-first, **OpenAI-compatible LLM inference gateway** for Apple Silicon (MLX). It serves
-local models behind a hardened Flask gateway and an nginx loopback proxy — with bearer auth,
-audit logging, output sanitization, and alias-based model routing.
+A **local-first AI governance plane** for Apple Silicon (MLX): an OpenAI-compatible gateway that
+mediates access to local models with **policy-as-code identity, authorization, output guardrails,
+and a structured decision audit** — behind an nginx loopback boundary.
 
-Built as a *governed* AI-infrastructure lab: the thesis is that **AI capability should not
-automatically become AI authority**. The value isn't that a model can run locally — it's the
-control boundaries around it (loopback-only binding, auth, sanitization, token clamping, audit
-trail, and explicit agent wrappers).
+The thesis is that **AI capability should not automatically become AI authority**. The value
+isn't that a model runs locally — it's the enforceable control boundary around it: who may call
+which model, under what limits, with every allow/deny decision recorded.
 
 ## Architecture
 
 ```text
-client (OpenAI SDK / agent CLI)
-  └─▶ nginx loopback proxy          127.0.0.1:8081   deploy/nginx/nginx.conf
-        └─▶ Flask OpenAI gateway    127.0.0.1:8080   src/private_ai_gateway/app.py
-              └─▶ MLX inference                       Apple Silicon
-                    └─▶ local model                   mlx-community/*
+client (OpenAI SDK / agent CLI)         Authorization: Bearer <api-key>
+  ▼
+nginx loopback proxy        127.0.0.1:8081   deploy/nginx/nginx.conf
+  ▼
+Flask gateway + governance  127.0.0.1:8080   src/private_ai_gateway/
+  • identity + authorization (policy.py)   • decision audit (audit.py)
+  ▼
+MLX inference → local model  Apple Silicon   mlx-community/*
 ```
 
 Requests route by a stable **alias** so clients never hardcode model names:
@@ -30,6 +32,29 @@ Requests route by a stable **alias** so clients never hardcode model names:
 The gateway lazily swaps models on demand (clearing the MLX cache between loads), strips visible
 thinking/tool-call/control markers from output, refuses to fake tool execution, and clamps
 output tokens per model.
+
+## Governance
+
+Authorization is **policy-as-code**. A TOML policy file defines principals (API-key
+identities); keys are stored as **SHA-256 hashes**, never plaintext:
+
+```toml
+# config/policy.toml  (gitignored; copy from config/policy.example.toml)
+[[principals]]
+name = "analyst"
+key_sha256 = "…"          # printf '%s' 'the-key' | shasum -a 256
+allowed_models = ["strategy", "engineering"]
+max_output_tokens = 2048
+```
+
+- **Identity** — the bearer token is hashed and resolved to a principal.
+- **Authorization** — a model outside the principal's `allowed_models` returns `403`; the
+  effective token cap is the tightest of request / per-model / per-principal.
+- **Decision audit** — every allow/deny is appended to `logs/decisions.jsonl` (request id,
+  principal, model, reason) for SIEM ingestion.
+
+With no policy file, the gateway runs single-principal using `PRIVATE_AI_AUTH_TOKEN` (an owner
+identity allowed every model), so local development stays zero-config.
 
 ## Quickstart
 
@@ -49,7 +74,8 @@ make stop
 ## Project layout
 
 ```text
-src/private_ai_gateway/   # the Flask OpenAI-compatible gateway (app.py)
+src/private_ai_gateway/   # gateway (app.py) + governance (policy.py, audit.py)
+config/                   # policy.example.toml — governance policy-as-code
 deploy/nginx/             # nginx loopback reverse-proxy config
 scripts/                  # operational entrypoints (start/stop/status/benchmark)
 agents/                   # owner-run operator wrappers (least-privilege, monitoring/inspection)
@@ -59,9 +85,10 @@ docs/                     # architecture, security model, runbook, roadmap
 
 ## Security
 
-Loopback-only, bearer-authenticated, output-sanitized, max-token-clamped, audit-logged. Tool
-execution is intentionally **not** trusted. See [SECURITY.md](SECURITY.md) and
-[docs/security-model.md](docs/security-model.md).
+Fail-closed bearer auth (constant-time), policy-as-code identity & authorization, output
+sanitization, per-principal token caps, request-size limits, loopback-only binding, and a
+structured decision audit. Tool execution is intentionally **not** trusted. See
+[SECURITY.md](SECURITY.md) and [docs/security-model.md](docs/security-model.md).
 
 ## Development
 

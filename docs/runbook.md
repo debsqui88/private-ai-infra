@@ -59,7 +59,7 @@ curl -sS http://127.0.0.1:8080/health | python3 -m json.tool
 Expected:
 
 - status is ok
-- models include strategy, engineering, and lab-validation routing
+- models include strategy, engineering, and offsec routing
 
 ## Model Discovery
 
@@ -71,7 +71,7 @@ Expected:
 
 - strategy alias is listed
 - engineering alias is listed
-- lab_validation or equivalent authorized lab-validation alias is listed
+- offsec alias is listed
 - resolved model names are listed
 
 ## Strategy Benchmark
@@ -108,9 +108,9 @@ Review:
 
 Run:
 
-./agents/opencode.sh inspect ~/private-ai-infra
-./agents/opencode.sh test ~/private-ai-infra
-./agents/openclaw.sh summarize_logs 0
+./agents/wrappers/opencode.sh inspect ~/private-ai-infra
+./agents/wrappers/opencode.sh test ~/private-ai-infra
+./agents/wrappers/openclaw.sh summarize_logs 0
 
 Expected:
 
@@ -130,7 +130,7 @@ Authorization: Bearer YOUR_TOKEN
 
 ### Model output contains thinking or tool tags
 
-Stop Hermes workflow and revalidate the gateway sanitizer.
+Stop the client workflow and revalidate the gateway sanitizer.
 
 ### Qwen template error
 
@@ -140,6 +140,6 @@ Check for multiple system messages. Gateway should merge Qwen system messages be
 
 First load can be slow. Look for MODEL_LOAD_START and MODEL_LOAD_SUCCESS in logs/audit.log.
 
-### Hermes emits fake tool calls
+### Client emits fake tool calls
 
 Stop the session and revalidate tool-call blocking.

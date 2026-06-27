@@ -1,30 +1,31 @@
-# Agent Wrappers
+# Operator Wrappers
 
-Last updated: 2026-06-21 20:21:24 EDT
+Owner-run helper scripts that demonstrate a least-privilege boundary around local
+operations. They are **not** wired into the gateway as autonomous tools — the operator
+runs them deliberately.
 
-This directory contains safe local wrappers for future OpenCode and OpenClaw use.
+## Wrappers
 
-## Roles
+- **`wrappers/opencode.sh`** — read-only engineering inspection and safe syntax tests.
+  `inspect` previews project files; `test` runs `bash -n` and JSON validation;
+  `suggest_patch` writes a placeholder; `apply_patch` is a no-op behind `--confirm`.
+- **`wrappers/openclaw.sh`** — monitoring only: listener/health status, audit/nginx log
+  tailing, a length-capped health loop, and audit-log summarization.
 
-- `opencode.sh`: engineering wrapper for inspection, safe tests, and patch suggestions.
-- `openclaw.sh`: operations wrapper for local status, logs, finite health checks, and summaries.
+## Safety properties
 
-## Safety Model
+These are the properties worth noting (and the reason the wrappers exist):
 
-These wrappers are intentionally conservative.
+- **Project-root jail** — every target path is resolved with `realpath` and rejected if
+  it escapes the project root.
+- **Read-only by default** — no file modification; the patch path is a no-op until an
+  explicit engine is added and approved.
+- **Sensitive-file skip** — previews are refused for `.env`, `*.key`, `*.pem`, etc.
+- **No process control** — no killing, no service restarts, no package installation.
+- **Bounded loops** — the health loop is hard-capped (≤120s), no infinite loops.
+- **Audited** — every invocation logs to `logs/agents.log`.
 
-- No autonomous project modification by default.
-- No paths outside `~/private-ai-infra`.
-- No service restarts.
-- No process killing.
-- No package installation.
-- No infinite loops.
-- All invocations log to `logs/agents.log`.
+## Configuration
 
-## Current Integration Status
-
-OpenCode and OpenClaw are not integrated as active Hermes tools.
-
-Hermes remains the text-only strategy/control plane.
-
-The owner runs deterministic shell commands.
+`openclaw.sh status` calls the gateway and reads
+`PRIVATE_AI_AUTH_TOKEN` from the environment (see [.env.example](../.env.example)).

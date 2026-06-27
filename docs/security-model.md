@@ -1,93 +1,73 @@
 # Security Model
 
-## Security Posture
+## Thesis
 
-This project uses governed local execution rather than uncontrolled autonomy.
+A model's ability to produce text is not authority to act. This gateway exists to make
+that boundary explicit: local models are reachable only over loopback, behind
+authentication, and their output is treated as untrusted — in particular, the gateway
+**refuses to fake tool execution**.
 
-Current rule:
+This is a defensive lab design, not a compliance claim.
 
-The model may plan.
-The owner executes deterministic commands.
-The gateway must not pretend tool execution exists.
+## Scope
 
-## Trust Boundaries
+In scope: the Flask gateway (`src/private_ai_gateway/app.py`) and its nginx loopback
+boundary (`deploy/nginx/nginx.conf`).
 
-| Boundary | Current Control |
-|---|---|
-| Network | loopback only, 127.0.0.1 |
-| API | bearer token required |
-| Model output | sanitizer strips thinking, tool, and control markers |
-| Tools | not executed through gateway |
-| Filesystem | owner-run deterministic scripts only |
-| Agents | wrappers only, no active Hermes integration |
-| GitHub | publication blocked until sanitization |
+Out of scope: the model weights themselves, the host OS, and any client that calls the
+gateway. The operator wrappers (`agents/wrappers/`) are owner-run and covered briefly
+below.
 
-## Approval Required
+## Trust boundaries
 
-Explicit approval is required before:
+| Boundary | Control | Status |
+|---|---|---|
+| Network | bind to `127.0.0.1` only (Flask + nginx) | active |
+| Authentication | bearer token on all non-health routes | active, see limits |
+| Model output | sanitizer strips thinking / tool / control markers | active (defense-in-depth) |
+| Tool execution | not performed by the gateway; tool-call output blocked + text fallback | active |
+| Output volume | per-request `max_tokens` clamped to a per-model cap | active |
+| Observability | every request audit-logged | active |
+| Operator wrappers | project-root jail, read-only inspection, monitoring-only ops | active |
 
-- editing gateway/app.py
-- editing config/nginx.conf
-- editing ~/.hermes/config.yaml
-- enabling TLS
-- using sudo
-- installing packages
-- deleting files
-- killing processes
-- creating launchd services
-- enabling MCP servers
-- integrating active autonomous tools
-- committing or pushing to Git
-- publishing to GitHub
+## Risks addressed (OWASP LLM / MITRE ATLAS framing)
 
-## AI Security Risks Addressed
+This gateway targets a focused subset rather than claiming broad coverage:
 
-This lab is aligned to common AI and agentic risk themes:
+- **LLM01 Prompt injection / LLM06 Excessive agency** — the gateway never grants the
+  model execution authority; tool-call output is blocked, not forwarded. A compromised
+  prompt cannot turn into an action through this path.
+- **LLM02 Insecure output handling** — model output is sanitized before it reaches the
+  client (thinking wrappers, fake tool calls, stray control tokens removed).
+- **Model denial-of-service (output)** — per-model output-token caps bound runaway
+  generations.
+- **Unbounded autonomy** — there is no agent loop in the gateway; the operator runs
+  deterministic commands.
 
-- prompt injection
-- insecure output handling
-- excessive agency
-- tool misuse
-- fake tool execution
-- system prompt leakage
-- memory poisoning
-- unbounded action loops
-- sensitive information disclosure
-- model denial-of-service through huge output requests
+ATLAS-style: the design assumes the model may attempt to emit
+adversarial/agentic output and contains it at the boundary rather than trusting it.
 
-## Current Mitigations
+## Limitations and non-goals (read this)
 
-- max-token clamp to 4096
-- local-only endpoint
-- bearer authentication
-- output sanitizer
-- no real tool execution through the gateway
-- owner-run scripts
-- persistent decision log
-- known-issues tracking
-- wrapper path restrictions
-- finite health loops only
-- GitHub publication block until sanitization
+Honesty about what is *not* yet hardened is part of the design:
 
-## Gateway-Specific Controls
+- **Authentication is a single static bearer token** with a development default
+  (`PRIVATE_AI_AUTH_TOKEN`). There is no rotation, no per-client tokens, and the
+  comparison is not constant-time. Treat it as a loopback gate, not a public auth system.
+- **The output sanitizer is a regex denylist.** It is defense-in-depth for *known*
+  marker shapes, not a guarantee against novel or obfuscated markers. Do not rely on it
+  as a sole control.
+- **Input size is not yet bounded** at the HTTP layer (no request-size limit, no rate
+  limiting) — only output tokens are clamped.
+- **No TLS.** The gateway is intended for loopback use only; do not expose it.
+- **Single-user by construction** (one global model reference, single-threaded) — this
+  is not a multi-tenant service.
 
-- Qwen thinking disabled through enable_thinking=False.
-- Qwen system messages merged before template rendering.
-- think wrappers stripped from model output.
-- tool/channel/control markers stripped from model output.
-- plain tool-call markers blocked with safe text fallback.
-- unsupported OpenAI/Hermes extras accepted but not executed.
+These are tracked as hardening work in [roadmap.md](roadmap.md).
 
-## Framework Alignment
+## Operator wrappers
 
-This project is conceptually aligned to:
-
-- NIST AI RMF and Generative AI Profile concepts
-- OWASP LLM and Agentic AI risk themes
-- MITRE ATLAS-style AI threat modeling
-- OpenTelemetry-style GenAI observability
-- OpenSSF Scorecard-style repository health
-- SLSA-style provenance roadmap
-- CISA Secure by Design principles
-
-This is not a claim of formal compliance. It is framework-aligned lab design.
+`agents/wrappers/opencode.sh` and `openclaw.sh` are owner-run helpers, intentionally
+least-privilege: a realpath-based project-root jail, read-only inspection and syntax
+tests only, no process control or service restarts, and patch application is a no-op
+behind an explicit `--confirm`. They are not wired into the gateway as autonomous tools.

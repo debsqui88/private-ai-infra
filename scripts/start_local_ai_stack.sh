@@ -8,7 +8,19 @@ cd "$PROJECT_ROOT"
 
 GATEWAY="src/private_ai_gateway/app.py"
 NGINX_CONF="deploy/nginx/nginx.conf"
-AUTH="${PRIVATE_AI_AUTH_TOKEN:-private-portfolio-token}"
+
+# Load local config if present (12-factor); see .env.example.
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
+# Provide a development default if none is configured, and export it so the
+# gateway process (which is fail-closed) inherits it.
+export PRIVATE_AI_AUTH_TOKEN="${PRIVATE_AI_AUTH_TOKEN:-private-portfolio-token}"
+AUTH="$PRIVATE_AI_AUTH_TOKEN"
 
 mkdir -p logs
 

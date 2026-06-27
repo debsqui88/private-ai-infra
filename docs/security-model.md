@@ -23,11 +23,12 @@ below.
 | Boundary | Control | Status |
 |---|---|---|
 | Network | bind to `127.0.0.1` only (Flask + nginx) | active |
-| Authentication | bearer token on all non-health routes | active, see limits |
+| Authentication | constant-time bearer check; fail-closed (won't start without a token) | active, see limits |
 | Model output | sanitizer strips thinking / tool / control markers | active (defense-in-depth) |
 | Tool execution | not performed by the gateway; tool-call output blocked + text fallback | active |
+| Input volume | request body capped via `MAX_CONTENT_LENGTH` (default 8 MiB) | active |
 | Output volume | per-request `max_tokens` clamped to a per-model cap | active |
-| Observability | every request audit-logged | active |
+| Observability | every request audit-logged (Authorization header never logged) | active |
 | Operator wrappers | project-root jail, read-only inspection, monitoring-only ops | active |
 
 ## Risks addressed (OWASP LLM / MITRE ATLAS framing)
@@ -51,14 +52,15 @@ adversarial/agentic output and contains it at the boundary rather than trusting 
 
 Honesty about what is *not* yet hardened is part of the design:
 
-- **Authentication is a single static bearer token** with a development default
-  (`PRIVATE_AI_AUTH_TOKEN`). There is no rotation, no per-client tokens, and the
-  comparison is not constant-time. Treat it as a loopback gate, not a public auth system.
+- **Authentication is a single static bearer token** (`PRIVATE_AI_AUTH_TOKEN`).
+  It is fail-closed (the gateway refuses to start without one) and compared in
+  constant time, but there is still no rotation and no per-client tokens. Treat it as a
+  loopback gate, not a public multi-client auth system.
 - **The output sanitizer is a regex denylist.** It is defense-in-depth for *known*
   marker shapes, not a guarantee against novel or obfuscated markers. Do not rely on it
   as a sole control.
-- **Input size is not yet bounded** at the HTTP layer (no request-size limit, no rate
-  limiting) — only output tokens are clamped.
+- **No per-client rate limiting yet.** Request body size is bounded
+  (`MAX_CONTENT_LENGTH`) and output tokens are clamped, but there is no request-rate cap.
 - **No TLS.** The gateway is intended for loopback use only; do not expose it.
 - **Single-user by construction** (one global model reference, single-threaded) — this
   is not a multi-tenant service.

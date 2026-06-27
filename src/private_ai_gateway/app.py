@@ -5,6 +5,7 @@ Client -> Nginx -> Flask -> MLX
 """
 
 import gc
+import hmac
 import json
 import logging
 import os
@@ -17,10 +18,19 @@ from mlx_lm import generate, load
 
 app = Flask(__name__)
 
+# Bound the request body to prevent unbounded-memory input DoS (default 8 MiB).
+app.config["MAX_CONTENT_LENGTH"] = int(
+    os.environ.get("PRIVATE_AI_MAX_CONTENT_LENGTH", str(8 * 1024 * 1024))
+)
+
 # -----------------------------
 # Config
 # -----------------------------
-AUTH_TOKEN = os.environ.get("PRIVATE_AI_AUTH_TOKEN", "private-portfolio-token")
+# Fail-closed: the gateway refuses to start without an auth token (enforced in
+# __main__). The documented development default lives in the launcher / .env,
+# never baked into the server itself.
+_DEV_DEFAULT_TOKEN = "private-portfolio-token"
+AUTH_TOKEN = os.environ.get("PRIVATE_AI_AUTH_TOKEN", "").strip()
 
 # Project root is three levels up: src/private_ai_gateway/app.py -> <root>
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -335,12 +345,15 @@ def authenticate_request():
     if request.path in ("/health", "/v1/health"):
         return None
 
-    auth_header = request.headers.get("Authorization", "")
+    provided = request.headers.get("Authorization", "")
+    expected = f"Bearer {AUTH_TOKEN}"
 
-    if auth_header != f"Bearer {AUTH_TOKEN}":
-        logger.warning(
-            f"AUTH_FAILURE | IP={request.remote_addr} | Path={request.path} | Headers={dict(request.headers)}"
-        )
+    # Constant-time comparison; an empty configured token denies all requests.
+    # The Authorization header is never logged (it carries the bearer credential).
+    if not AUTH_TOKEN or not hmac.compare_digest(
+        provided.encode("utf-8"), expected.encode("utf-8")
+    ):
+        logger.warning(f"AUTH_FAILURE | IP={request.remote_addr} | Path={request.path}")
         return jsonify(
             {
                 "error": {
@@ -353,6 +366,19 @@ def authenticate_request():
 
     logger.info(f"AUTH_SUCCESS | IP={request.remote_addr} | Path={request.path}")
     return None
+
+
+@app.errorhandler(413)
+def request_entity_too_large(_e):
+    return jsonify(
+        {
+            "error": {
+                "message": "Request body too large",
+                "type": "invalid_request_error",
+                "code": "payload_too_large",
+            }
+        }
+    ), 413
 
 
 @app.route("/health", methods=["GET"])
@@ -614,5 +640,16 @@ def completions():
 
 
 if __name__ == "__main__":
+    # Fail-closed: refuse to start without an auth token.
+    if not AUTH_TOKEN:
+        raise SystemExit(
+            "PRIVATE_AI_AUTH_TOKEN is not set. Refusing to start the gateway without "
+            "an auth token. Set it in your environment or .env (see .env.example)."
+        )
+    if AUTH_TOKEN == _DEV_DEFAULT_TOKEN:
+        logger.warning(
+            "AUTH_TOKEN_IS_DEV_DEFAULT | Using the documented development token; "
+            "set a unique PRIVATE_AI_AUTH_TOKEN before any real use."
+        )
     # Single process/thread avoids multiple MLX model copies.
     app.run(host="127.0.0.1", port=8080, threaded=False)

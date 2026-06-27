@@ -51,8 +51,8 @@ make stop
 ```text
 src/private_ai_gateway/   # the Flask OpenAI-compatible gateway (app.py)
 deploy/nginx/             # nginx loopback reverse-proxy config
-scripts/                  # operational entrypoints (start/stop/status/benchmark/validate)
-agents/                   # agent boundary design — prompts/ and wrappers/
+scripts/                  # operational entrypoints (start/stop/status/benchmark)
+agents/                   # owner-run operator wrappers (least-privilege, monitoring/inspection)
 tests/                    # unit/ (pytest) + integration/ (stack smoke test)
 docs/                     # architecture, security model, runbook, roadmap
 ```

@@ -1,80 +1,37 @@
-# Future Scope and Evolution Roadmap
+# Roadmap
 
-## Executive Vision
+The value of this project is not that a model can run locally — it is the control
+boundary around it. The roadmap reflects that: harden the boundary first, broaden
+capability second.
 
-This project should evolve into a portfolio-grade local AI security infrastructure lab for governed agentic workflows.
+## Near-term — harden the boundary
 
-It should demonstrate:
+These close the gaps named in [security-model.md](security-model.md):
 
-- local AI infrastructure
-- DevSecOps automation patterns
-- AppSec workflow support
-- model routing
-- local gateway design
-- auditability
-- safe wrappers
-- human approval gates
-- supply-chain awareness
-- security-focused documentation
+- **Fail-closed auth** — refuse to start without `PRIVATE_AI_AUTH_TOKEN` set; use a
+  constant-time comparison; stop logging the `Authorization` header on auth failure.
+- **Request-size limit** — set `MAX_CONTENT_LENGTH` so the input side is bounded, not
+  just output tokens.
+- **Rate limiting** on the gateway.
+- **Test coverage on security paths** — auth pass/fail, alias routing, token clamping,
+  and the tool-call-block fallback (today only the sanitizer is covered).
 
-## Maturity Model
+## Medium-term — observability and packaging
 
-| Level | Name | Target Capability |
-|---|---|---|
-| L0 | Manual Local Gateway | basic local model endpoint |
-| L1 | Reliable Control Plane | stable Hermes CLI path |
-| L2 | Safe Wrappers | owner-run OpenCode/OpenClaw wrappers |
-| L3 | Persistent Memory | project state, decisions, run history |
-| L4 | Governed Semi-Autonomous Workflows | bounded approval-based operations |
-| L5 | Security Engineering Lab | AppSec, DevSecOps, detection demos |
-| L6 | AI DevSecOps Cockpit | dashboards, workflows, eval harness |
-| L7 | Enterprise Reference Architecture | hardened, documented, sanitized, repeatable |
+- Structured JSONL audit logs (machine-parseable, OpenTelemetry-style GenAI fields).
+- True token-by-token streaming (the current SSE path emits a single chunk).
+- Container packaging and a documented deploy path.
 
-## Recommended Build Order
+## Longer-term — capability, behind the same boundary
 
-1. Validate model and gateway hygiene.
-2. Build persistent memory.
-3. Build safe wrappers.
-4. Build utility scripts.
-5. Build portfolio docs.
-6. Add validation harness.
-7. Sanitize for GitHub.
-8. Add architecture diagrams.
-9. Add demo workflows.
-10. Add local RAG.
-11. Add MCP research plan.
-12. Add eval harness.
-13. Add supply-chain controls.
-14. Add enterprise-hardening roadmap.
+- Local RAG over project documentation.
+- A model-output safety eval harness (regression tests for the sanitizer against
+  adversarial outputs).
+- An optional, explicitly-gated tool registry — only if it can be added without
+  weakening the "model output is not authority" guarantee.
 
-## Future Use Cases
+## Non-goals
 
-- GHAS triage cockpit
-- secret remediation planner
-- CyberArk migration planner
-- CodeQL triage explainer
-- AppSec meeting assistant
-- vulnerability ownership tracker
-- CI/CD hardening advisor
-- IaC security review assistant
-- dependency risk dashboard
-- local incident runbook generator
-- local RAG security knowledge base
-- pull request risk summarizer
-- model-output safety eval harness
-
-## Deferred Work
-
-- TLS migration
-- desktop validation
-- MCP/tool integration
-- GitHub publication
-- all-model benchmark sweeps
-- richer status script output
-- OpenCode/OpenClaw binary installation
-
-## Final Principle
-
-The value of this project is not that AI can run commands.
-
-The value is demonstrating local AI infrastructure, security boundaries, observability, governed autonomy, DevSecOps workflows, and enterprise-ready thinking.
+- Multi-tenant SaaS operation.
+- Public/internet exposure (this is loopback-first by design).
+- Autonomous agent loops driving execution without an operator in the loop.

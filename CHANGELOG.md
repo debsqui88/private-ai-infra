@@ -4,6 +4,28 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-06-29
+
+### Added
+- **The adversarial evals now feed OpenClaw's assurance — a failed eval gates the planning
+  loop.** OpenClaw gained an eighth control, `AC-SECURITY-EVALS`, that reads the eval
+  harness's JSON report as one more evidence artifact (it does *not* import the harness — same
+  doctrine as reading the decision audit or an isolation report) and judges it:
+  - a failing probe (a control that let an attack through) — or a `fail` count above zero even
+    if the verdict string says otherwise — is a **FAIL** (`high`);
+  - an unreadable / verdict-less report is a **FAIL** (integrity gap, fail closed);
+  - no report, or a run where every probe was skipped, is **INCONCLUSIVE** (never a silent pass);
+  - a clean run is **PASS**, with any skipped probes surfaced as a coverage gap.
+- **Closed the third thread of the control loop.** `python -m openclaw.run --eval-report …` and
+  `python -m hermes.verify --eval-report …` thread the eval verdict through assurance into
+  Hermes' memory, so a security regression caught by the eval suite becomes a failing assurance
+  control and **gates the next planning cycle** exactly like any other control breach
+  (`evals → OpenClaw → Hermes`). New `evals/examples/security-eval.report.json`.
+
+### Changed
+- OpenClaw assurance contract and README list the new control; suite grows with evidence/control/
+  runner/closed-loop tests for the eval-gating path.
+
 ## [0.9.0] - 2026-06-29
 
 ### Security

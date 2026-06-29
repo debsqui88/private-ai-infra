@@ -25,9 +25,9 @@ capability second.
   principal (autonomy ceiling **L1**), then persists `PROJECT_STATE.json` / `RUN_HISTORY.md` /
   `NEXT_ACTIONS.md` with atomic writes and pre-write backups (`agents/hermes/`).
 - **OpenClaw assurance verifier** — read-only (autonomy **L0**) verifier that reads the
-  decision audit, `/metrics` counters, OpenCode isolation manifests, and policy, runs seven
-  controls over them, and emits a PASS/FAIL/INCONCLUSIVE assurance report; exits non-zero only
-  on FAIL so it can gate CI (`agents/openclaw/`).
+  decision audit, `/metrics` counters, OpenCode isolation manifests, policy, and the adversarial
+  eval report, runs eight controls over them, and emits a PASS/FAIL/INCONCLUSIVE assurance
+  report; exits non-zero only on FAIL so it can gate CI (`agents/openclaw/`).
 - **Closed assurance → planning loop** — `hermes.verify` runs OpenClaw and folds the verdict
   back into Hermes' memory (an `assurance` block + run-history entry + a remediation gate on
   FAIL), so the next planning cycle plans from *verified* state and a failing control gates new
@@ -36,6 +36,10 @@ capability second.
   controls (autonomy bypass, model authorization, fail-closed auth, rate limiting, secret egress),
   tagged by OWASP LLM risk, emitting a PASS/FAIL report that gates CI. It caught and fixed a real
   autonomy-ceiling bypass (conflicting header/body declaration) and now regression-tests it.
+- **Eval verdict feeds assurance → gates planning** — OpenClaw's `AC-SECURITY-EVALS` control
+  reads the eval report as evidence, so a failing probe becomes a failing assurance control that
+  Hermes folds into memory and treats as a remediation gate on the next planning cycle. The
+  third thread (`evals → OpenClaw → Hermes`) of the plan → act → verify → record loop is closed.
 - **Security-path tests** — auth, policy, rate-limit, guardrail, metrics, autonomy, the Hermes
   memory/plan/verify paths, the OpenClaw evidence/controls/report/runner paths, and the eval
   harness covered.
@@ -66,8 +70,9 @@ substrate (above) is live, the running agents are next:
 
 ## Next — extend the eval harness
 
-- Add **prompt-injection / tool-misuse** probes once an explicitly-gated tool path exists, and
-  feed the eval report into OpenClaw's assurance so a failed eval gates the planning loop.
+- Add **prompt-injection / tool-misuse** probes once an explicitly-gated tool path exists.
+  (Feeding the eval verdict into OpenClaw's assurance so a failed eval gates the planning loop
+  is now **done** — see boundary hardening above.)
 
 ## Longer-term — capability, behind the same boundary
 

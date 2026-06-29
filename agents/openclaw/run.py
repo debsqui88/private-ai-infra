@@ -43,6 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--audit", default=DEFAULT_AUDIT, help="Path to decisions.jsonl")
     p.add_argument("--policy", help="Path to policy.toml (enables model-allowlist cross-check)")
     p.add_argument("--opencode-report", help="Path to an OpenCode isolation run report")
+    p.add_argument(
+        "--eval-report",
+        help="Path to a security-eval report JSON (python -m evals.run --format json)",
+    )
     src = p.add_mutually_exclusive_group()
     src.add_argument("--metrics-file", help="Read Prometheus metrics from a file")
     src.add_argument("--metrics-url", help="Scrape GET /metrics from this gateway base URL")
@@ -82,13 +86,22 @@ def main(argv: list[str] | None = None, *, metrics_client_factory=MetricsClient)
     isolation = (
         evidence.load_isolation_report(args.opencode_report) if args.opencode_report else None
     )
+    eval_report = (
+        evidence.load_eval_report(args.eval_report) if args.eval_report else None
+    )
     try:
         metrics = _gather_metrics(args, metrics_client_factory=metrics_client_factory)
     except (MetricsError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    ev = Evidence(audit=audit, metrics=metrics, policy=policy, isolation=isolation)
+    ev = Evidence(
+        audit=audit,
+        metrics=metrics,
+        policy=policy,
+        isolation=isolation,
+        eval_report=eval_report,
+    )
     report = build_report(checks.run_all(ev))
 
     rendered = {

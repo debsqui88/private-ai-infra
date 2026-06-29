@@ -88,6 +88,20 @@ def test_run_metrics_url_without_token_errors(tmp_path, monkeypatch, capsys):
     assert "error" in capsys.readouterr().err.lower()
 
 
+def test_run_eval_report_failing_probe_exits_one(tmp_path, capsys):
+    er = tmp_path / "evals.json"
+    er.write_text(
+        '{"verdict":"FAIL","counts":{"pass":11,"fail":1,"skip":0},'
+        '"results":[{"id":"AUTONOMY-004","owasp":"LLM06","attack":"hdr+body",'
+        '"status":"fail"}]}',
+        encoding="utf-8",
+    )
+    code = run.main(["--audit", _audit(tmp_path, [_CLEAN]), "--eval-report", str(er)])
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "AC-SECURITY-EVALS" in out and "FAIL" in out
+
+
 def test_run_missing_audit_file_is_inconclusive_not_crash(tmp_path, capsys):
     code = run.main(["--audit", str(tmp_path / "nope.jsonl")])
     # no evidence -> no failures -> PASS verdict, exit 0

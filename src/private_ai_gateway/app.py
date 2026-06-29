@@ -605,9 +605,11 @@ def chat_completions():
     # The request declares an intended level (header or body); the principal carries a
     # ceiling (its own, else the policy default). When no ceiling is configured anywhere,
     # gating is off. This turns the L0-L6 ladder from a prompt rule into an enforced one.
-    declared_level = autonomy.parse_level(
+    # The effective declared level is the most-privileged across header and body, so a
+    # caller cannot under-declare in one channel to bypass the ceiling via the other.
+    declared_level = autonomy.declared_level(
         request.headers.get("X-Autonomy-Level"),
-        autonomy.parse_level(req_data.get("autonomy_level"), autonomy.DEFAULT_REQUEST_LEVEL),
+        req_data.get("autonomy_level"),
     )
     autonomy_ceiling = principal.max_autonomy_level
     if autonomy_ceiling is None:

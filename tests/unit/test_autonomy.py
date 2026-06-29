@@ -25,6 +25,27 @@ def test_level_name():
     assert autonomy.level_name(None) == "unset"
 
 
+def test_declared_level_takes_most_privileged_across_channels():
+    # header only / body only
+    assert autonomy.declared_level("L3", None) == 3
+    assert autonomy.declared_level(None, "L4") == 4
+    # both present: the HIGHER wins, regardless of which channel it's in
+    assert autonomy.declared_level("L1", "L6") == 6
+    assert autonomy.declared_level("L6", "L1") == 6
+
+
+def test_declared_level_defaults_when_nothing_declared():
+    assert autonomy.declared_level(None, None) == autonomy.DEFAULT_REQUEST_LEVEL
+    # garbage in both channels falls back to the default, not silently to 0
+    assert autonomy.declared_level("nonsense", "L99") == autonomy.DEFAULT_REQUEST_LEVEL
+
+
+def test_declared_level_ignores_invalid_channel_keeps_valid_one():
+    # one channel garbage, the other valid -> the valid one stands
+    assert autonomy.declared_level("L99", "L5") == 5
+    assert autonomy.declared_level("L2", "garbage") == 2
+
+
 def test_policy_loads_principal_and_default_autonomy(tmp_path):
     p = tmp_path / "policy.toml"
     p.write_text(

@@ -32,8 +32,13 @@ capability second.
   back into Hermes' memory (an `assurance` block + run-history entry + a remediation gate on
   FAIL), so the next planning cycle plans from *verified* state and a failing control gates new
   work (`agents/hermes/verify.py`).
+- **Adversarial security eval harness** — an active suite (`evals/`) that attacks the enforced
+  controls (autonomy bypass, model authorization, fail-closed auth, rate limiting, secret egress),
+  tagged by OWASP LLM risk, emitting a PASS/FAIL report that gates CI. It caught and fixed a real
+  autonomy-ceiling bypass (conflicting header/body declaration) and now regression-tests it.
 - **Security-path tests** — auth, policy, rate-limit, guardrail, metrics, autonomy, the Hermes
-  memory/plan/verify paths, and the OpenClaw evidence/controls/report/runner paths covered.
+  memory/plan/verify paths, the OpenClaw evidence/controls/report/runner paths, and the eval
+  harness covered.
 
 ## Next major scope — orchestration control plane (Phase 2)
 
@@ -59,11 +64,14 @@ substrate (above) is live, the running agents are next:
 - Container packaging and a documented deploy path.
 - Grafana dashboard / alerting examples over the `/metrics` counters.
 
+## Next — extend the eval harness
+
+- Add **prompt-injection / tool-misuse** probes once an explicitly-gated tool path exists, and
+  feed the eval report into OpenClaw's assurance so a failed eval gates the planning loop.
+
 ## Longer-term — capability, behind the same boundary
 
 - Local RAG over project documentation.
-- A model-output safety eval harness (regression tests for the sanitizer against
-  adversarial outputs).
 - An optional, explicitly-gated tool registry — only if it can be added without
   weakening the "model output is not authority" guarantee.
 

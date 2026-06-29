@@ -63,6 +63,22 @@ def parse_level(value, default: int | None = None) -> int | None:
     return default
 
 
+def declared_level(header_value, body_value, *, default: int = DEFAULT_REQUEST_LEVEL) -> int:
+    """The effective autonomy level a request declares across all channels.
+
+    A request can declare its intended level in more than one place — the
+    ``X-Autonomy-Level`` header and the ``autonomy_level`` body field. The effective
+    level is the **most privileged** of whatever is supplied, never the lowest: otherwise
+    a caller could under-declare in one channel (e.g. ``X-Autonomy-Level: L1``) to slip a
+    higher level past the ceiling in another (e.g. ``"autonomy_level": "L6"`` in the body).
+    If no channel supplies a valid level, the ``default`` applies.
+    """
+    levels = [
+        lvl for lvl in (parse_level(header_value), parse_level(body_value)) if lvl is not None
+    ]
+    return max(levels) if levels else default
+
+
 def level_name(number: int | None) -> str:
     """Human-readable name for a level number."""
     if number is None:

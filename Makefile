@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install install-dev start stop status test cov lint fmt sast audit check
+.PHONY: help install install-dev start stop status test cov lint fmt sast audit check evals
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -25,16 +25,19 @@ test: ## Run unit tests
 	pytest
 
 cov: ## Run tests with coverage (fails under 70%)
-	pytest --cov=private_ai_gateway --cov=hermes --cov=openclaw --cov-report=term-missing --cov-fail-under=70
+	pytest --cov=private_ai_gateway --cov=hermes --cov=openclaw --cov=evals --cov-report=term-missing --cov-fail-under=70
 
 lint: ## Lint with ruff
-	ruff check src tests agents/hermes agents/openclaw
+	ruff check src tests agents/hermes agents/openclaw evals
 
 fmt: ## Auto-format with ruff
-	ruff format src tests agents/hermes agents/openclaw
+	ruff format src tests agents/hermes agents/openclaw evals
 
 sast: ## Static security analysis (bandit)
-	bandit -r src agents/hermes agents/openclaw -q
+	bandit -r src agents/hermes agents/openclaw evals -q
+
+evals: ## Run the adversarial security eval suite
+	PYTHONPATH=src python -m evals.run
 
 audit: ## Dependency vulnerability scan (pip-audit)
 	pip-audit -r requirements.txt

@@ -4,6 +4,37 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-06-29
+
+### Security
+- **Fixed an autonomy-ceiling bypass (found by the new eval harness).** A request could
+  declare a low level in the `X-Autonomy-Level` header while smuggling a *higher* level in
+  the `autonomy_level` body field; the gateway trusted the header and ignored the body, so
+  the higher level slipped past the ceiling. The effective declared level is now the
+  **most-privileged across all channels** (`autonomy.declared_level`), so under-declaring in
+  one channel can no longer bypass the gate. Covered by `AUTONOMY-004` and unit tests.
+
+### Added
+- **Adversarial security eval harness (`evals/`).** An *active* counterpart to OpenClaw's
+  passive verification: it drives the gateway's enforced controls with attack-shaped inputs
+  and asserts each one holds, emitting a pass/fail report (text/json/markdown) that exits
+  non-zero on FAIL — a CI-gateable security artifact.
+  - Probes are tagged with the OWASP LLM risk they exercise: **autonomy bypass** (LLM06 —
+    over-ceiling via header, body, `6`-vs-`L6` format smuggling, and conflicting channels),
+    **model authorization** (LLM06), **authentication** fail-closed (LLM06), **rate limiting**
+    (LLM10 Unbounded Consumption), and **secret egress** (LLM02 — AWS key / PEM / JWT redaction
+    with a benign-prose false-positive check).
+  - Transport-agnostic core (`harness.py`): the scoring is validated in CI with canned
+    transports; the egress probes run for real against the pure `Guardrails`; the full suite
+    runs against the live gateway on Apple Silicon, where `test_live_gateway_repels_every_attack`
+    asserts every control holds. A held control is PASS, a breach is FAIL, an unrunnable probe is
+    SKIP (never a silent pass).
+  - `make evals` / `PYTHONPATH=src python -m evals.run`. Suite 148 → 163; coverage ~92%.
+
+### Changed
+- `docs/roadmap.md`, README, and the example report: the model-safety/eval-harness roadmap item
+  moves to done; `evals` is included in `make check` (lint + SAST + coverage).
+
 ## [0.8.0] - 2026-06-29
 
 ### Added

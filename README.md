@@ -131,6 +131,7 @@ config/                   # policy.example.toml — governance policy-as-code
 deploy/nginx/             # nginx loopback reverse-proxy config
 scripts/                  # operational entrypoints (start/stop/status/benchmark)
 agents/                   # orchestration components: hermes/ (stateful planner), opencode_sandbox/ (isolated reviewer), openclaw/ (assurance verifier), wrappers/ (owner-run, least-privilege)
+evals/                    # adversarial security evals (attack the enforced controls; OWASP-LLM tagged)
 tests/                    # unit/ (pytest) + integration/ (stack smoke test)
 docs/                     # architecture, security model, orchestration, runbook, roadmap
 ```
@@ -140,8 +141,14 @@ docs/                     # architecture, security model, orchestration, runbook
 Fail-closed bearer auth (constant-time), policy-as-code identity & authorization, per-principal
 rate limiting, secret-egress guardrails, output sanitization, per-principal token caps,
 request-size limits, loopback-only binding, and a structured decision audit. Tool execution is
-intentionally **not** trusted. See
-[SECURITY.md](SECURITY.md) and [docs/security-model.md](docs/security-model.md).
+intentionally **not** trusted.
+
+These controls are not just asserted — they are **attacked**. The adversarial eval harness
+([`evals/`](evals)) drives the gateway with attack-shaped inputs (autonomy-ceiling bypass,
+model-allowlist evasion, fail-closed auth, rate-limit exhaustion, secret egress), tagged by
+OWASP LLM risk, and fails CI if any control regresses. It has already caught and fixed a real
+autonomy-bypass (a request declaring a low level in the header while smuggling a higher one in
+the body). See [SECURITY.md](SECURITY.md) and [docs/security-model.md](docs/security-model.md).
 
 ## Development
 

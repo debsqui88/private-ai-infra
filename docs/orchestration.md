@@ -20,7 +20,7 @@ mandate and a specific autonomy ceiling.
 |---|---|---|
 | **Hermes** | Planning / orchestration. Decomposes an objective into a structured plan, decides which component should handle each sub-task, and routes the delegation. Hermes plans; it does not execute. | The gateway, as an identified principal |
 | **OpenCode** | Code-execution agent. Inspects, tests, and (under approval) modifies code. Intended to run inside an isolated environment (network-restricted, scoped filesystem, resource-limited). | A sandbox, invoked as a constrained principal |
-| **OpenClaw** | Security / observability agent. Offensive-security checks, code review, telemetry, and security-signal collection that feeds the decision audit and metrics. | Read/monitor surfaces and the gateway |
+| **OpenClaw** | Security / assurance agent. Verifies that the governance plane's controls actually held — reads the decision audit, metrics, and OpenCode's isolation manifests and emits a structured assurance report. Observes; never acts. | Read-only evidence surfaces + `GET /metrics` |
 
 Each component authenticates to the gateway as its **own principal** (its own API
 key, its own `allowed_models`, token cap, rate limit, and autonomy ceiling in
@@ -105,15 +105,27 @@ Honesty about the boundary is part of the design.
   pre-write backup). It plans; it does not execute. Asking to operate above L1 is denied by the
   same autonomy gate (`403 autonomy_exceeded`) and audited — the planner holds no special
   privilege.
+- **OpenClaw runs as a read-only assurance verifier.** The component at
+  [`agents/openclaw/`](../agents/openclaw) reads the evidence the plane already emits — the
+  decision audit, the `/metrics` counters, OpenCode's isolation manifests, and the policy — and
+  runs a set of controls over it (`AC-AUDIT-INTEGRITY`, `AC-AUTONOMY-CEILING`, `AC-AUTHZ-MODEL`,
+  `AC-RATELIMIT`, `AC-GUARDRAIL-EGRESS`, `AC-METRICS-RECONCILE`, `AC-OPENCODE-ISOLATION`). It
+  emits a structured **assurance report** (PASS / FAIL / INCONCLUSIVE per control) and exits
+  non-zero only on FAIL. It runs **observe-only (autonomy L0)**: it reconciles independent
+  evidence streams and surfaces gaps, but it changes nothing and has no authority to clear its
+  own findings. This is the assurance step the roadmap puts *before* widening any implementer's
+  authority — the verifier is defined first.
 
-**Planned (Phase 2, behind the same boundary):**
+**Planned (next, behind the same boundary):**
 
+- **OpenClaw → Hermes feedback:** feed live assurance findings back into Hermes' memory so
+  consecutive plans build on *verified* state, and add model-driven offensive-security probes
+  for the `openclaw` principal (its `allowed_models` / L0 ceiling already exist in policy).
 - **OpenCode** OS-level hardening: additionally run the existing capability-denied harness
   under a kernel jail (seccomp/namespaces) and add an approval-gated apply path.
-- **OpenClaw** offensive-security / code-review / telemetry tasks feeding `/metrics`
-  and the decision audit.
 - Approval gates (`APPROVAL REQUIRED`) for any L4+ action, surfaced to the owner.
 
-See [roadmap.md](roadmap.md) for sequencing. The OpenCode review sandbox is implemented in
-[`agents/opencode_sandbox/`](../agents/opencode_sandbox); the read-only operator wrappers in
-[`agents/wrappers/`](../agents/wrappers) are the present-day stand-ins for the OpenClaw surface.
+See [roadmap.md](roadmap.md) for sequencing. All three components now have running
+implementations: [`agents/hermes/`](../agents/hermes) (planner),
+[`agents/opencode_sandbox/`](../agents/opencode_sandbox) (isolated reviewer), and
+[`agents/openclaw/`](../agents/openclaw) (assurance verifier).

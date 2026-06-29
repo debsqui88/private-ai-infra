@@ -25,16 +25,16 @@ test: ## Run unit tests
 	pytest
 
 cov: ## Run tests with coverage (fails under 70%)
-	pytest --cov=private_ai_gateway --cov=hermes --cov-report=term-missing --cov-fail-under=70
+	pytest --cov=private_ai_gateway --cov=hermes --cov=openclaw --cov-report=term-missing --cov-fail-under=70
 
 lint: ## Lint with ruff
-	ruff check src tests agents/hermes
+	ruff check src tests agents/hermes agents/openclaw
 
 fmt: ## Auto-format with ruff
-	ruff format src tests agents/hermes
+	ruff format src tests agents/hermes agents/openclaw
 
 sast: ## Static security analysis (bandit)
-	bandit -r src agents/hermes -q
+	bandit -r src agents/hermes agents/openclaw -q
 
 audit: ## Dependency vulnerability scan (pip-audit)
 	pip-audit -r requirements.txt

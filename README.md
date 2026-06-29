@@ -94,17 +94,19 @@ ceiling:
 |---|---|
 | **Hermes** | Planning / orchestration — runs as a **stateful planner** (`agents/hermes/`): loads persistent memory, delegates one planning cycle to the gateway as the `hermes` principal (autonomy **L1**), records the plan back to memory. Plans; does not execute. |
 | **OpenCode** | Code-review agent — runs **capability-denied and isolation-verified** (`agents/opencode_sandbox/`): edit/bash/network denied, isolated config, reviews a copy, writes proven to stay in-sandbox. |
-| **OpenClaw** | Security / observability — offsec checks, code review, telemetry feeding the audit + metrics. |
+| **OpenClaw** | Assurance — runs **read-only, observe-only** (`agents/openclaw/`): reads the decision audit, `/metrics`, OpenCode's isolation manifests, and policy, runs assurance controls over them, and emits a PASS/FAIL/INCONCLUSIVE report. Verifies; does not act. |
 
 Delegated work is classified on an **autonomy ladder** (L0 observe → L1 suggest → L2 dry-run →
 L3 owner-run → L4 monitored → L5 continuous → L6 unbounded). The gateway enforces each
 principal's ceiling on every request, so a component can't be handed work above its mandate even
 if the plan asks for it. Autonomy enforcement, identity/authorization, rate limiting, and
-egress guardrails are **live today**; **OpenCode** runs as a capability-denied,
-isolation-verified reviewer ([`agents/opencode_sandbox/`](agents/opencode_sandbox)) and
-**Hermes** runs as a stateful planner that delegates at L1
-([`agents/hermes/`](agents/hermes)). OpenClaw and OS-level jailing are the next phase. Full
-design and current-vs-planned status: **[docs/orchestration.md](docs/orchestration.md)**.
+egress guardrails are **live today**, and all three components now have running implementations:
+**Hermes** plans at L1 ([`agents/hermes/`](agents/hermes)), **OpenCode** runs as a
+capability-denied, isolation-verified reviewer
+([`agents/opencode_sandbox/`](agents/opencode_sandbox)), and **OpenClaw** runs as a read-only
+assurance verifier at L0 ([`agents/openclaw/`](agents/openclaw)). OS-level jailing and feeding
+assurance findings back into Hermes' memory are the next phase. Full design and
+current-vs-planned status: **[docs/orchestration.md](docs/orchestration.md)**.
 
 ## Quickstart
 
@@ -128,7 +130,7 @@ src/private_ai_gateway/   # gateway (app.py) + governance (policy, ratelimit, gu
 config/                   # policy.example.toml — governance policy-as-code
 deploy/nginx/             # nginx loopback reverse-proxy config
 scripts/                  # operational entrypoints (start/stop/status/benchmark)
-agents/                   # orchestration components: hermes/ (stateful planner), opencode_sandbox/ (isolated reviewer), wrappers/ (owner-run, least-privilege)
+agents/                   # orchestration components: hermes/ (stateful planner), opencode_sandbox/ (isolated reviewer), openclaw/ (assurance verifier), wrappers/ (owner-run, least-privilege)
 tests/                    # unit/ (pytest) + integration/ (stack smoke test)
 docs/                     # architecture, security model, orchestration, runbook, roadmap
 ```

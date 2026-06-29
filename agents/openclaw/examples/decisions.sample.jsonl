@@ -1,0 +1,6 @@
+{"ts":"2026-06-28T09:00:01Z","request_id":"r-0001","principal":"analyst","method":"POST","path":"/v1/chat/completions","model":"strategy","decision":"allow","reason":"authorized","status":200}
+{"ts":"2026-06-28T09:00:04Z","request_id":"r-0002","principal":"analyst","method":"POST","path":"/v1/chat/completions","model":"offsec","decision":"deny","reason":"model_not_allowed","status":403}
+{"ts":"2026-06-28T09:00:07Z","request_id":"r-0003","principal":"hermes","method":"POST","path":"/v1/chat/completions","model":"strategy","decision":"deny","reason":"autonomy_exceeded: requested L3 > ceiling L1","status":403}
+{"ts":"2026-06-28T09:00:09Z","request_id":"r-0004","principal":"analyst","method":"POST","path":"/v1/chat/completions","model":"strategy","decision":"deny","reason":"rate_limited","status":429}
+{"ts":"2026-06-28T09:00:12Z","request_id":"r-0005","principal":"offsec-lead","method":"POST","path":"/v1/chat/completions","model":"engineering","decision":"filter","reason":"guardrail_redacted: aws_access_key_id","status":200}
+{"ts":"2026-06-28T09:00:15Z","request_id":"r-0006","principal":"hermes","method":"POST","path":"/v1/chat/completions","model":"strategy","decision":"allow","reason":"authorized","status":200}

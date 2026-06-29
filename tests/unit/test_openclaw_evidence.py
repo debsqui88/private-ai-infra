@@ -133,3 +133,43 @@ def test_load_policy_reduces_principals(tmp_path):
 
 def test_load_policy_missing_is_none(tmp_path):
     assert evidence.load_policy(tmp_path / "nope.toml") is None
+
+
+# ------------------------------------------------------------------- eval report
+def test_parse_eval_report_extracts_verdict_and_failed_probes():
+    rep = evidence.parse_eval_report(
+        '{"verdict":"FAIL","counts":{"pass":11,"fail":1,"skip":0},'
+        '"results":[{"id":"AUTONOMY-004","owasp":"LLM06","attack":"hdr+body",'
+        '"status":"fail"},{"id":"AUTHZ-001","status":"pass"}]}',
+        source="e.json",
+    )
+    assert rep.verdict == "FAIL"
+    assert (rep.passed, rep.failed, rep.skipped) == (11, 1, 0)
+    assert rep.failed_probes == ["AUTONOMY-004 (LLM06): hdr+body"]
+    assert not rep.malformed
+
+
+def test_parse_eval_report_malformed_on_bad_json():
+    rep = evidence.parse_eval_report("{not json", source="e.json")
+    assert rep.malformed and rep.verdict is None
+
+
+def test_parse_eval_report_malformed_when_verdict_missing():
+    rep = evidence.parse_eval_report('{"counts":{"pass":1}}', source="e.json")
+    assert rep.malformed
+
+
+def test_load_eval_report_roundtrips_from_harness(tmp_path):
+    # The shape the harness actually writes (evals.report.EvalReport.to_json).
+    p = _write(
+        tmp_path,
+        "r.json",
+        '{"component":"security-evals","generated_at":"t","verdict":"PASS",'
+        '"counts":{"pass":12,"fail":0,"skip":0},"results":[]}',
+    )
+    rep = evidence.load_eval_report(p)
+    assert rep.verdict == "PASS" and rep.passed == 12 and rep.source == str(p)
+
+
+def test_load_eval_report_missing_is_none(tmp_path):
+    assert evidence.load_eval_report(tmp_path / "nope.json") is None

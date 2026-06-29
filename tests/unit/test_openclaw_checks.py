@@ -7,6 +7,7 @@ from openclaw.checks import FAIL, INCONCLUSIVE, PASS, Evidence
 from openclaw.evidence import (
     AuditEvent,
     AuditLog,
+    EvalReportView,
     IsolationReport,
     MetricSample,
     MetricSet,
@@ -206,6 +207,59 @@ def test_isolation_inconclusive_when_absent():
     assert f.status == INCONCLUSIVE
 
 
+# --------------------------------------------------------------- AC-SECURITY-EVALS
+def test_security_evals_pass_when_all_repelled():
+    rep = EvalReportView(verdict="PASS", passed=12, failed=0, skipped=0, source="e.json")
+    f = checks.check_security_evals(Evidence(audit=_log([]), eval_report=rep))
+    assert f.status == PASS
+    assert "12" in f.detail
+
+
+def test_security_evals_fail_on_failing_probe():
+    rep = EvalReportView(
+        verdict="FAIL",
+        passed=11,
+        failed=1,
+        skipped=0,
+        failed_probes=["AUTONOMY-004 (LLM06): header L1 + body L6"],
+        source="e.json",
+    )
+    f = checks.check_security_evals(Evidence(audit=_log([]), eval_report=rep))
+    assert f.status == FAIL and f.severity == "high"
+    assert "AUTONOMY-004" in f.detail
+
+
+def test_security_evals_fail_counts_alone_trigger_fail():
+    # A truthful failed count must fail even if the verdict string was tampered to PASS.
+    rep = EvalReportView(verdict="PASS", passed=10, failed=2, skipped=0, source="e.json")
+    f = checks.check_security_evals(Evidence(audit=_log([]), eval_report=rep))
+    assert f.status == FAIL
+
+
+def test_security_evals_fail_on_malformed_report():
+    rep = EvalReportView(malformed=True, source="e.json")
+    f = checks.check_security_evals(Evidence(audit=_log([]), eval_report=rep))
+    assert f.status == FAIL and f.severity == "high"
+
+
+def test_security_evals_inconclusive_when_all_skipped():
+    rep = EvalReportView(verdict="PASS", passed=0, failed=0, skipped=12, source="e.json")
+    f = checks.check_security_evals(Evidence(audit=_log([]), eval_report=rep))
+    assert f.status == INCONCLUSIVE
+
+
+def test_security_evals_inconclusive_when_absent():
+    f = checks.check_security_evals(Evidence(audit=_log([])))
+    assert f.status == INCONCLUSIVE
+
+
+def test_security_evals_notes_skip_coverage_gap_but_passes():
+    rep = EvalReportView(verdict="PASS", passed=8, failed=0, skipped=4, source="e.json")
+    f = checks.check_security_evals(Evidence(audit=_log([]), eval_report=rep))
+    assert f.status == PASS
+    assert "skipped" in f.detail.lower()
+
+
 # ----------------------------------------------------------------- run_all
 def test_run_all_returns_one_finding_per_control():
     findings = checks.run_all(Evidence(audit=_log([_event()])))
@@ -218,4 +272,5 @@ def test_run_all_returns_one_finding_per_control():
         "AC-GUARDRAIL-EGRESS",
         "AC-METRICS-RECONCILE",
         "AC-OPENCODE-ISOLATION",
+        "AC-SECURITY-EVALS",
     }

@@ -104,9 +104,11 @@ egress guardrails are **live today**, and all three components now have running 
 **Hermes** plans at L1 ([`agents/hermes/`](agents/hermes)), **OpenCode** runs as a
 capability-denied, isolation-verified reviewer
 ([`agents/opencode_sandbox/`](agents/opencode_sandbox)), and **OpenClaw** runs as a read-only
-assurance verifier at L0 ([`agents/openclaw/`](agents/openclaw)). OS-level jailing and feeding
-assurance findings back into Hermes' memory are the next phase. Full design and
-current-vs-planned status: **[docs/orchestration.md](docs/orchestration.md)**.
+assurance verifier at L0 ([`agents/openclaw/`](agents/openclaw)). The loop is closed: OpenClaw's
+verdict — including the adversarial eval suite (`evals/`) folded in as evidence — is recorded
+into Hermes' memory, so a failing control gates the next planning cycle. OS-level jailing of the
+OpenCode sandbox is the remaining phase. Full design and current-vs-planned status:
+**[docs/orchestration.md](docs/orchestration.md)**.
 
 ## Quickstart
 

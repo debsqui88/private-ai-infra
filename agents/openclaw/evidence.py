@@ -7,6 +7,7 @@ already emits and parses each into a typed view the controls can reason over:
   - ``MetricSet``      — the Prometheus text exposition from ``GET /metrics``.
   - ``IsolationReport``— OpenCode's sandbox run report (``ISOLATION_RESULT=PASS`` etc.).
   - ``PolicyView``     — principals and their allowlists/ceilings from ``policy.toml``.
+  - ``EvalReportView`` — the adversarial security-eval report (``evals.run --format json``).
 
 Every loader is tolerant of *absence* (a missing optional source yields ``None`` so the
 dependent control reports INCONCLUSIVE) but strict about *malformation* (a corrupt audit
@@ -279,3 +280,65 @@ def load_policy(path: str | Path) -> PolicyView | None:
             "max_autonomy_level": entry.get("max_autonomy_level"),
         }
     return view
+
+
+# ------------------------------------------------------------------------- eval report
+@dataclass
+class EvalReportView:
+    """The adversarial security-eval report, reduced to what assurance needs.
+
+    The eval harness *attacks* the live enforced controls; OpenClaw treats its JSON
+    output as one more evidence artifact — exactly like the audit or an isolation
+    report — rather than importing the harness. A report that does not parse, or is
+    missing its ``verdict``/``counts``, is ``malformed`` (an integrity gap, not a pass).
+    """
+
+    verdict: str | None = None
+    passed: int = 0
+    failed: int = 0
+    skipped: int = 0
+    failed_probes: list[str] = field(default_factory=list)
+    malformed: bool = False
+    source: str = ""
+
+
+def _as_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def parse_eval_report(text: str, *, source: str = "") -> EvalReportView:
+    """Parse the JSON emitted by ``python -m evals.run --format json``."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return EvalReportView(malformed=True, source=source)
+    if not isinstance(data, dict) or "verdict" not in data or "counts" not in data:
+        return EvalReportView(malformed=True, source=source)
+    counts = data.get("counts") or {}
+    results = data.get("results") or []
+    failed_probes = [
+        f"{r.get('id')} ({r.get('owasp')}): {r.get('attack')}"
+        for r in results
+        if isinstance(r, dict) and r.get("status") == "fail"
+    ]
+    return EvalReportView(
+        verdict=str(data.get("verdict")),
+        passed=_as_int(counts.get("pass")),
+        failed=_as_int(counts.get("fail")),
+        skipped=_as_int(counts.get("skip")),
+        failed_probes=failed_probes,
+        source=source,
+    )
+
+
+def load_eval_report(path: str | Path) -> EvalReportView | None:
+    """Load a security-eval report, or ``None`` if the file is absent."""
+    p = Path(path)
+    try:
+        text = p.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    return parse_eval_report(text, source=str(p))

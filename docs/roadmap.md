@@ -24,20 +24,26 @@ capability second.
 - **Hermes stateful planner** — delegates one planning cycle to the gateway as the `hermes`
   principal (autonomy ceiling **L1**), then persists `PROJECT_STATE.json` / `RUN_HISTORY.md` /
   `NEXT_ACTIONS.md` with atomic writes and pre-write backups (`agents/hermes/`).
-- **Security-path tests** — auth, policy, rate-limit, guardrail, metrics, autonomy, and the
-  Hermes memory/plan paths covered (80 tests, 88% coverage).
+- **OpenClaw assurance verifier** — read-only (autonomy **L0**) verifier that reads the
+  decision audit, `/metrics` counters, OpenCode isolation manifests, and policy, runs seven
+  controls over them, and emits a PASS/FAIL/INCONCLUSIVE assurance report; exits non-zero only
+  on FAIL so it can gate CI (`agents/openclaw/`).
+- **Security-path tests** — auth, policy, rate-limit, guardrail, metrics, autonomy, the Hermes
+  memory/plan paths, and the OpenClaw evidence/controls/report/runner paths covered.
 
 ## Next major scope — orchestration control plane (Phase 2)
 
 The control plane is designed in [orchestration.md](orchestration.md); the enforcement
 substrate (above) is live, the running agents are next:
 
-- **Hermes** — *next:* feed real `OpenClaw` security signals and OpenCode review outcomes back
-  into Hermes' memory so consecutive cycles plan from verified results, not just declared state.
+- **OpenClaw → Hermes feedback** — *next:* feed live OpenClaw assurance findings (and OpenCode
+  review outcomes) back into Hermes' memory so consecutive cycles plan from *verified* results,
+  not just declared state. This closes the plan → act → verify → record loop.
+- **OpenClaw probes** — add model-driven offensive-security / code-review checks for the
+  `openclaw` principal (its `allowed_models` and L0 ceiling already exist in policy), on top of
+  today's evidence-verification controls.
 - **OpenCode** — OS-level hardening: run the existing capability-denied review sandbox under a
   kernel jail (seccomp/namespaces) and add an approval-gated apply path.
-- **OpenClaw** — offensive-security / code-review / telemetry tasks feeding `/metrics` and the
-  decision audit.
 - **Approval gates** — `APPROVAL REQUIRED` for any L4+ action, surfaced to the owner.
 
 ## Near-term — remaining hardening

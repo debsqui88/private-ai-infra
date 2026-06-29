@@ -4,6 +4,40 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-28
+
+### Added
+- **OpenClaw assurance verifier (`agents/openclaw/`).** Adds the third control-plane
+  component as a **read-only, observe-only (autonomy L0)** verifier — the assurance step the
+  roadmap places *before* widening any implementer's authority ("the verifier is defined
+  first").
+  - **Evidence loaders** (`evidence.py`): parse the decision audit (`decisions.jsonl`), the
+    Prometheus `/metrics` text, OpenCode's isolation run report, and `policy.toml`. Malformed
+    audit records are *recorded as integrity gaps*, never silently dropped; absent optional
+    sources yield `None` so the dependent control reports INCONCLUSIVE rather than a false PASS.
+  - **Controls** (`checks.py`): seven assurance controls, each a pure function over the
+    evidence — `AC-AUDIT-INTEGRITY`, `AC-AUTONOMY-CEILING` (every over-ceiling decision was a
+    `403` deny), `AC-AUTHZ-MODEL` (every `allow` stayed within the principal's allowlist),
+    `AC-RATELIMIT` (`429`), `AC-GUARDRAIL-EGRESS`, `AC-METRICS-RECONCILE` (the metrics counters
+    are consistent with the audit — divergence flags a dropped increment or audit skew), and
+    `AC-OPENCODE-ISOLATION` (`ISOLATION_RESULT=PASS`, clean secret scan, exit 0).
+  - **Report** (`report.py`): an assurance report rendered as text / JSON / Markdown, with a
+    verdict of **FAIL** if any control fails (else **PASS**); INCONCLUSIVE controls are listed
+    explicitly so coverage gaps are visible, not hidden. As a CI gate it exits non-zero only on
+    FAIL.
+  - **Read-only metrics client + CLI** (`client.py`, `run.py`): an audit-only pass needs no
+    gateway; `--metrics-url` scrapes `GET /metrics` as the `openclaw` principal at autonomy
+    **L0** (single GET, never a write). `--policy` and `--opencode-report` widen the cross-checks.
+- Tests for the evidence loaders, every control's PASS/FAIL/INCONCLUSIVE path, the report
+  verdict/rendering, and the CLI (audit-only, JSON, output-file, injected metrics client).
+  OpenClaw is pure-stdlib, so its tests run on CI; `make check` lints and SAST-scans it and
+  `make cov` includes it.
+
+### Changed
+- `docs/orchestration.md`, `docs/roadmap.md`, and the README: OpenClaw moves from "planned" to
+  "implemented — read-only assurance verifier"; all three components now have running
+  implementations. The next step is feeding live assurance findings back into Hermes' memory.
+
 ## [0.6.0] - 2026-06-28
 
 ### Added

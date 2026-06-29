@@ -1,0 +1,15 @@
+# HELP gateway_requests_total Terminal request decisions by principal.
+# TYPE gateway_requests_total counter
+gateway_requests_total{principal="analyst"} 2
+gateway_requests_total{principal="hermes"} 1
+gateway_requests_total{principal="offsec-lead"} 1
+# HELP gateway_authz_denials_total Authorization denials by reason.
+# TYPE gateway_authz_denials_total counter
+gateway_authz_denials_total{reason="model_not_allowed"} 1
+gateway_authz_denials_total{reason="autonomy_exceeded"} 1
+# HELP gateway_rate_limited_total Requests rejected by the rate limiter.
+# TYPE gateway_rate_limited_total counter
+gateway_rate_limited_total 1
+# HELP gateway_guardrail_events_total Responses that tripped an egress guardrail.
+# TYPE gateway_guardrail_events_total counter
+gateway_guardrail_events_total 1

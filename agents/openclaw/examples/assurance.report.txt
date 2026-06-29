@@ -1,0 +1,31 @@
+OpenClaw assurance report
+generated: 2026-06-29T03:57:52Z
+verdict:   PASS  (7 pass / 0 fail / 0 inconclusive)
+
+[        PASS] AC-AUDIT-INTEGRITY — Decision audit is well-formed
+               all 6 audit record(s) parsed with required fields and a known decision value.
+               evidence: agents/openclaw/examples/decisions.sample.jsonl
+
+[        PASS] AC-AUTONOMY-CEILING — Autonomy ceiling was never exceeded
+               all 1 autonomy-ceiling decision(s) were 403 denials — no over-ceiling request was allowed.
+               evidence: agents/openclaw/examples/decisions.sample.jsonl
+
+[        PASS] AC-AUTHZ-MODEL — Allowed requests stayed within model allowlists
+               every allowed request used a model within its principal's allowlist, and all model denials were 403.
+               evidence: agents/openclaw/examples/decisions.sample.jsonl, config/policy.example.toml
+
+[        PASS] AC-RATELIMIT — Rate-limit decisions were enforced as 429
+               all 1 rate-limit decision(s) were 429 denials.
+               evidence: agents/openclaw/examples/decisions.sample.jsonl
+
+[        PASS] AC-GUARDRAIL-EGRESS — Egress-guardrail events are well-formed
+               1 egress-guardrail decision(s) recorded, each with a reason.
+               evidence: agents/openclaw/examples/decisions.sample.jsonl
+
+[        PASS] AC-METRICS-RECONCILE — Audit and metrics counters agree
+               all 3 reconcilable counter(s) are consistent with the audit (metric ≥ audit count).
+               evidence: agents/openclaw/examples/decisions.sample.jsonl
+
+[        PASS] AC-OPENCODE-ISOLATION — OpenCode sandbox stayed isolated
+               OpenCode reported ISOLATION_RESULT=PASS with a clean secret scan and exit 0 — no out-of-sandbox writes.
+               evidence: agents/opencode_sandbox/examples/isolated_review.report.txt

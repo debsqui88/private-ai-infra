@@ -61,6 +61,14 @@ capability second.
   memory/plan/verify paths, the OpenClaw evidence/controls/report/runner paths, the eval
   harness, and the OpenCode act-step (gate/confinement/verify/CLI) covered.
 
+- **A2A + MCP governance** — the gateway is the authority layer for both agent-to-agent
+  interop and tool access. `GET /.well-known/agent-card.json` renders an A2A Agent Card from
+  policy (granted skills + enforced autonomy ceiling); `POST /a2a/tasks` gates delegation by
+  `allowed_skills` + ceiling; `POST /mcp/call` gates tool calls by `allowed_tools` + a per-tool
+  autonomy floor. Proven by evals `A2A-001/002` and `MCP-001`.
+- **Installable package** — `pip install .` registers the `private-ai-gateway` console command
+  (`serve` / `version`), so the gateway runs without the Makefile or nginx.
+
 ## Next major scope — orchestration control plane (Phase 2)
 
 The control plane is designed in [orchestration.md](orchestration.md); the enforcement

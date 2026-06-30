@@ -4,9 +4,24 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.13.0] - 2026-06-30
 
 ### Added
+- **Installable as a package** — `pip install .` registers a `private-ai-gateway` console
+  command (`serve` / `version`), so the gateway runs without the Makefile or nginx
+  (`private-ai-gateway serve` → Flask on `127.0.0.1:8080`). `[project.scripts]` entry point.
+- **A2A (Agent2Agent) governance** — the gateway is now the authority layer for
+  agent-to-agent interop. `GET /.well-known/agent-card.json` renders an A2A-style Agent Card
+  **from policy** (advertising only granted skills + the enforced autonomy ceiling), and
+  `POST /a2a/tasks` accepts a delegated task only if the principal is granted the skill
+  (`allowed_skills`) and stays within its autonomy ceiling — else `403 skill_not_allowed` /
+  `403 autonomy_exceeded`. Proven by evals `A2A-001/002`.
+- **MCP tool-access governance** — `POST /mcp/call` gates every tool invocation by the
+  principal's `allowed_tools` and the tool's required autonomy level (each tool declares a
+  min level); ungranted or over-privileged calls are refused before the handler runs
+  (`403 tool_not_allowed` / `403 autonomy_exceeded`). `GET /mcp/tools` lists the caller's
+  permitted tools. Built-in tools are pure/side-effect-free. Proven by eval `MCP-001`.
+- Suite is now **18 adversarial evals**; **232 tests** at ~92% coverage.
 - **MITRE ATLAS technique mapping** — eval cases now carry a MITRE ATLAS technique ID
   (`AML.T0051.000/.001` prompt injection, `AML.T0057` data leakage) surfaced in the report
   JSON, and `docs/security-model.md` gains a concrete ATLAS coverage table plus an explicit

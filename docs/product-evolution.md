@@ -63,12 +63,12 @@ How today's enforced controls already answer the newest taxonomy, and where the 
 | ASI risk (2026) | What the attacker does | This project's answer | Status | Proven by |
 |---|---|---|---|---|
 | **ASI01** Agent Goal Hijack | injected/poisoned content redirects the agent | routing & model authz decided from the **principal**, not the prompt | enforced | `AGENTIC-001`, `AUTHZ-001` |
-| **ASI02** Tool Misuse & Exploitation | agent abuses a connected tool | OpenCode apply is capability-denied, approval-gated, sandbox-confined | partial | `AC-OPENCODE-ISOLATION`, `AC-APPLY-INTEGRITY` |
+| **ASI02** Tool Misuse & Exploitation | agent abuses a connected tool | MCP tool calls gated by `allowed_tools` + a per-tool autonomy floor; OpenCode apply confined | enforced | `MCP-001`, `AC-OPENCODE-ISOLATION`, `AC-APPLY-INTEGRITY` |
 | **ASI03** Identity & Privilege Abuse | agent inherits/escalates privilege | per-principal identity, no shared "god" token, **autonomy ceiling** | enforced | `AGENTIC-002`, `AUTONOMY-001/002/004` |
 | **ASI04** Agentic Supply Chain | compromised dep/plugin/model | `pip-audit` + `bandit` + CodeQL in CI; pinned deps | partial | CI gates (no SBOM/signing yet) |
 | **ASI05** Unexpected Code Execution | agent runs code/commands unsafely | apply confined to a copy, sha256-verified to touch only declared files | partial | `test_opencode_act`, `AC-APPLY-INTEGRITY` |
 | **ASI06** Memory & Context Poisoning | poison memory / RAG to steer later behavior | egress secret-redaction (last boundary); audit integrity check | partial | `AGENTIC-003`, `EGRESS-001…004`, `AC-AUDIT-INTEGRITY` |
-| **ASI07** Insecure Inter-Agent Comms | spoof/tamper between agents | each agent is its own principal over a loopback boundary | partial | `AC-AUTHZ-MODEL` (no signed messages yet) |
+| **ASI07** Insecure Inter-Agent Comms | spoof/tamper between agents | A2A delegation gated by `allowed_skills` + autonomy ceiling; agent cards rendered from policy, not self-asserted | partial | `A2A-001/002` (signed cards / mTLS still roadmapped) |
 | **ASI08** Cascading Failures | small errors propagate across the loop | fail-closed gates; autonomy ceiling halts runaway; metrics reconcile | partial | `AC-METRICS-RECONCILE` |
 | **ASI09** Human-Agent Trust Exploitation | user over-trusts agent output | nothing executes on a model's say-so; OpenClaw re-derives verdicts | enforced | `AC-*` reconcile suite |
 | **ASI10** Rogue Agents | a captured agent acts while looking legitimate | independent L0 verifier reconciles audit ↔ metrics ↔ policy | partial | OpenClaw assurance run |

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "private-ai-gateway"
-version = "0.12.0"
+version = "0.13.0"
 description = "Local-first AI governance plane: an OpenAI-compatible MLX gateway with policy-as-code identity, authorization, output guardrails, and decision audit."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,6 +19,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff>=0.6", "pytest>=8.0", "pytest-cov>=5.0", "bandit>=1.7", "pip-audit>=2.7"]
+
+[project.scripts]
+private-ai-gateway = "private_ai_gateway.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/private_ai_gateway"]

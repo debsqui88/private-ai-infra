@@ -6,110 +6,166 @@
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-A **local-first AI governance plane** for Apple Silicon (MLX): an OpenAI-compatible gateway that
-mediates access to local models with **policy-as-code identity, authorization, output guardrails,
-and a structured decision audit** — behind an nginx loopback boundary.
+> ## AI capability is not AI authority.
+>
+> A **local-first AI governance plane** for Apple Silicon (MLX): an OpenAI-compatible
+> gateway that mediates every call to a local model — **policy-as-code identity, model
+> authorization, an enforced L0–L6 autonomy ceiling, egress guardrails, and a structured
+> decision audit**, behind an nginx loopback boundary.
+>
+> A leaked low-privilege key can't reach a model it was never granted; an agent capped at
+> *suggest* can't be handed work that *executes*. Enforced in code, **before any model
+> loads** — not asserted in a README — with every allow/deny recorded and independently
+> re-verified.
 
-The thesis is that **AI capability should not automatically become AI authority**. The value
-isn't that a model runs locally — it's the enforceable control boundary around it: who may call
-which model, under what limits, with every allow/deny decision recorded.
+<!-- DEMO: regenerate with `vhs demo/enforce.tape` -->
+<p align="center">
+  <img src="docs/assets/enforce.gif" alt="Live demo: a principal capped at autonomy L1 is denied 403 when it declares L6, and denied 403 for a model outside its allowlist — enforced before any model loads." width="860">
+</p>
 
-## Architecture
+<p align="center"><sub>A principal capped at <b>L1 (suggest)</b> is refused <code>403</code> the instant it asks for more — autonomy it doesn't have, or a model it was never granted. Enforced <i>before</i> the model even loads. <a href="#see-it-enforce-no-gif">Text version ↓</a></sub></p>
 
-```text
-client (OpenAI SDK / agent CLI)         Authorization: Bearer <api-key>
-  ▼
-nginx loopback proxy        127.0.0.1:8081   deploy/nginx/nginx.conf
-  ▼
-Flask gateway + governance  127.0.0.1:8080   src/private_ai_gateway/
-  • identity + authorization (policy.py)   • rate limiting (ratelimit.py)
-  • output guardrails (guardrails.py)      • decision audit (audit.py)
-  • metrics + introspection (metrics.py)
-  ▼
-MLX inference → local model  Apple Silicon   mlx-community/*
+---
+
+## How it enforces
+
+Every request crosses the loopback boundary and runs a fixed gauntlet of checks. Each
+gate fails **closed** with a specific status, and every outcome — allow or deny — is
+written to the decision audit and the metrics counters.
+
+```mermaid
+flowchart TB
+    C["Client<br/>OpenAI SDK · agent · curl"]
+
+    subgraph BOUND["🔒 nginx loopback boundary — binds 127.0.0.1 only"]
+      NG["nginx&nbsp;:8081"] --> FL["Flask gateway&nbsp;:8080"]
+    end
+
+    C -->|"Authorization: Bearer &lt;key&gt;"| NG
+
+    subgraph GOV["Governance plane — policy-as-code"]
+      direction TB
+      A1{"Authenticated?<br/><sub>constant-time</sub>"}
+      A2["Identity<br/><sub>token → principal (SHA-256)</sub>"]
+      A3{"Model in<br/>allowlist?"}
+      A4{"Autonomy ≤<br/>principal ceiling?"}
+      A5{"Within rate<br/>budget?"}
+      INF["MLX inference<br/><sub>lazy model load</sub>"]
+      G{"Secret-shaped<br/>output?"}
+      OUT["Response"]
+
+      A1 -->|no| D401["401 — fail closed"]
+      A1 -->|yes| A2 --> A3
+      A3 -->|no| D403m["403 model_not_allowed"]
+      A3 -->|yes| A4
+      A4 -->|no| D403a["403 autonomy_exceeded"]
+      A4 -->|yes| A5
+      A5 -->|no| D429["429 + Retry-After"]
+      A5 -->|yes| INF --> G
+      G -->|yes| RB["redact / block"]
+      G -->|no| OUT
+    end
+
+    FL --> A1
+    D401 --> AUD
+    D403m --> AUD
+    D403a --> AUD
+    D429 --> AUD
+    RB --> AUD
+    OUT --> AUD
+    AUD[("📋 Decision audit<br/>logs/decisions.jsonl · /metrics")]
+
+    classDef deny fill:#b3261e,stroke:#7f1d1d,color:#fff;
+    classDef ok fill:#1a7f37,stroke:#0f5323,color:#fff;
+    classDef store fill:#9a6700,stroke:#633c01,color:#fff;
+    class D401,D403m,D403a,D429,RB deny;
+    class OUT,INF ok;
+    class AUD store;
 ```
 
-Requests route by a stable **alias** so clients never hardcode model names:
+Note the ordering: **authz, autonomy, and rate-limit denials all happen *before* the
+model loads** — an unauthorized or runaway request is rejected cheaply, never paying for
+inference it wasn't allowed to run.
 
-| alias | model |
-|-------|-------|
-| `strategy` | `mlx-community/Qwen3.6-27B-OptiQ-4bit` |
-| `engineering` | `mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit` |
-| `offsec` | `mlx-community/Llama-3-70B-Instruct-Gradient-1048k-4bit` |
+## Proven, not asserted
 
-The gateway lazily swaps models on demand (clearing the MLX cache between loads), strips visible
-thinking/tool-call/control markers from output, refuses to fake tool execution, and clamps
-output tokens per model.
+The differentiator isn't that these controls exist — it's that they are **attacked** by
+an adversarial eval suite that fails CI on regression, and **independently re-verified**
+by a read-only assurance agent (OpenClaw) that reconciles the audit, metrics, and policy.
+Each row is a control, the attack against it, and where that attack is proven to fail:
 
-## Governance
+| Control | Attack it repels | Enforced in | Proven by |
+|---|---|---|---|
+| Fail-closed auth | unauthenticated / wrong token | `app.py` (constant-time) | `evals` AUTHN-001/002 · `test_auth` |
+| Identity + model authz | low-priv key reaches an ungranted model | `policy.py` → `403` | `evals` AUTHZ-001 · `test_policy` |
+| **Autonomy ceiling** | agent declares more autonomy than its mandate | `autonomy.py` → `403` | `evals` AUTONOMY-001/002 · `test_autonomy` |
+| Autonomy **under-declare** | low level in header, high in body | `declared_level` (most-privileged-wins) | `evals` **AUTONOMY-004** — the real bug it caught |
+| Rate limiting | one key saturates the gateway | `ratelimit.py` → `429` | `evals` RATELIMIT-001 · `test_ratelimit` |
+| Secret egress | model surfaces an AWS key / JWT / PEM | `guardrails.py` redact/block | `evals` EGRESS-001…004 · `test_guardrails` |
+| Apply integrity | an apply runs ungated or escapes its sandbox | `opencode_sandbox/apply.py` | OpenClaw `AC-APPLY-INTEGRITY` · `test_opencode_act` |
 
-Authorization is **policy-as-code**. A TOML policy file defines principals (API-key
-identities); keys are stored as **SHA-256 hashes**, never plaintext:
-
-```toml
-# config/policy.toml  (gitignored; copy from config/policy.example.toml)
-[[principals]]
-name = "analyst"
-key_sha256 = "…"          # printf '%s' 'the-key' | shasum -a 256
-allowed_models = ["strategy", "engineering"]
-max_output_tokens = 2048
-requests_per_minute = 30
-
-[ratelimit]
-default_requests_per_minute = 60
-
-[guardrails]
-action = "redact"          # off | redact | block
-```
-
-- **Identity** — the bearer token is hashed and resolved to a principal.
-- **Authorization** — a model outside the principal's `allowed_models` returns `403`; the
-  effective token cap is the tightest of request / per-model / per-principal.
-- **Autonomy ceiling** — each principal is capped on the L0–L6 autonomy ladder
-  (`max_autonomy_level`); a request declaring a higher level (via `X-Autonomy-Level`) is
-  denied `403 autonomy_exceeded` before any model loads. See
-  [Orchestration](#orchestration-control-plane).
-- **Rate limiting** — a per-principal token bucket (`requests_per_minute`, with a policy-wide
-  default); over-limit requests get `429` + `Retry-After` before any model loads.
-- **Output guardrails** — responses are scanned for credential-shaped content (AWS keys,
-  private-key blocks, API tokens, JWTs) and `redact`ed or `block`ed by policy. Authority to
-  *invoke* a model is not authority to *exfiltrate* secrets.
-- **Decision audit** — every allow/deny/throttle/filter is appended to `logs/decisions.jsonl`
-  (request id, principal, model, reason) for SIEM ingestion.
-- **Observability** — `GET /metrics` (Prometheus text) exposes decision/denial/throttle/guardrail
-  counters; `GET /v1/whoami` returns the caller's effective permissions.
-
-With no policy file, the gateway runs single-principal using `PRIVATE_AI_AUTH_TOKEN` (an owner
-identity allowed every model), so local development stays zero-config.
+→ Run the attacks yourself: `make evals` · Re-verify the controls: `make` + see [docs/threat-model.md](docs/threat-model.md).
 
 ## Orchestration control plane
 
-The gateway is the enforcement layer for a multi-agent control plane whose guiding rule is
-that **AI capability is not AI authority** — a planner may reason about anything, but what
-*executes* is decided and recorded by the governance plane. Three components, each
-authenticating as its **own principal** with its own model allowlist, caps, and autonomy
-ceiling:
+The gateway is the enforcement substrate for a three-component agent control plane. Each
+component authenticates as its **own principal** with its own model allowlist and autonomy
+ceiling — there is no shared "god" identity. They form a closed **plan → act → verify →
+record** loop where a model may *reason* about anything, but what *executes* is decided
+and recorded by the governance plane.
 
-| Component | Mandate |
-|---|---|
-| **Hermes** | Planning / orchestration — runs as a **stateful planner** (`agents/hermes/`): loads persistent memory, delegates one planning cycle to the gateway as the `hermes` principal (autonomy **L1**), records the plan back to memory. Plans; does not execute. |
-| **OpenCode** | Implementer — **reviews** capability-denied and isolation-verified (edit/bash/network denied, isolated config, reviews a copy, writes proven to stay in-sandbox), and **acts** through an approval-gated apply path: a proposed change is refused without an explicit owner approval, confined to a sandbox copy, and verified to change only the files it declared (`agents/opencode_sandbox/`). |
-| **OpenClaw** | Assurance — runs **read-only, observe-only** (`agents/openclaw/`): reads the decision audit, `/metrics`, OpenCode's isolation manifests, and policy, runs assurance controls over them, and emits a PASS/FAIL/INCONCLUSIVE report. Verifies; does not act. |
+```mermaid
+flowchart LR
+    H["🧭 <b>Hermes</b><br/>stateful planner<br/><sub>autonomy L1 · plans, never executes</sub>"]
+    ACT["🛠️ <b>OpenCode</b><br/>isolated reviewer + apply<br/><sub>approval-gated · confined · verified</sub>"]
+    OC["🔍 <b>OpenClaw</b><br/>assurance verifier<br/><sub>autonomy L0 · read-only</sub>"]
+    EV["⚔️ Adversarial evals<br/><sub>OWASP-LLM tagged</sub>"]
+    GW[("Gateway evidence<br/><sub>audit · metrics · isolation</sub>")]
+    MEM[("🧠 Hermes memory")]
 
-Delegated work is classified on an **autonomy ladder** (L0 observe → L1 suggest → L2 dry-run →
-L3 owner-run → L4 monitored → L5 continuous → L6 unbounded). The gateway enforces each
-principal's ceiling on every request, so a component can't be handed work above its mandate even
-if the plan asks for it. Autonomy enforcement, identity/authorization, rate limiting, and
-egress guardrails are **live today**, and all three components now have running implementations:
-**Hermes** plans at L1 ([`agents/hermes/`](agents/hermes)), **OpenCode** both reviews
-(capability-denied, isolation-verified) and **acts** through an approval-gated, confined,
-verified apply path ([`agents/opencode_sandbox/`](agents/opencode_sandbox)), and **OpenClaw**
-runs as a read-only assurance verifier at L0 ([`agents/openclaw/`](agents/openclaw)). The loop is
-closed: OpenClaw's verdict — including the adversarial eval suite (`evals/`) folded in as
-evidence — is recorded into Hermes' memory, so a failing control gates the next planning cycle.
-OS-level (seccomp/namespaces) jailing of the OpenCode apply is the remaining phase. Full design
-and current-vs-planned status:
-**[docs/orchestration.md](docs/orchestration.md)**.
+    H -->|"plan (suggest)"| ACT
+    ACT -->|"apply report"| OC
+    EV -->|"eval report"| OC
+    GW --> OC
+    OC -->|"verdict: PASS / FAIL"| MEM
+    MEM -.->|"a failing control gates the next plan"| H
+
+    classDef l0 fill:#0969da,stroke:#0a3069,color:#fff;
+    classDef l1 fill:#8250df,stroke:#3e1f79,color:#fff;
+    classDef act fill:#1a7f37,stroke:#0f5323,color:#fff;
+    class OC l0;
+    class H l1;
+    class ACT act;
+```
+
+Full design and current-vs-planned status: **[docs/orchestration.md](docs/orchestration.md)**.
+
+## See it enforce (no GIF)
+
+With a policy active, the `hermes` token resolves to a principal capped at **L1 (suggest),
+models `["strategy"]`**. Every attempt to exceed that mandate is refused on the wire,
+before any model loads:
+
+```console
+$ curl -s -XPOST :8081/v1/chat/completions -H "Authorization: Bearer $HERMES" \
+       -H "X-Autonomy-Level: 6" -d '{"model":"strategy","messages":[...]}'
+{"error":{"code":"autonomy_exceeded","message":"Principal 'hermes' is capped at
+ autonomy L1 (suggest); request declared L6 (unbounded)","type":"permission_error"}}
+HTTP 403
+
+$ curl ... -d '{"model":"offsec","messages":[...]}'          # not in its allowlist
+{"error":{"code":"model_not_allowed","message":"Principal 'hermes' is not permitted
+ to use model 'offsec'","type":"permission_error"}}
+HTTP 403
+
+$ curl ... -H "X-Autonomy-Level: 1" -d '{"autonomy_level":6,...}'   # under-declare
+{"error":{"code":"autonomy_exceeded", ...}}    # most-privileged-wins: still 403
+HTTP 403
+```
+
+The denials land in `logs/decisions.jsonl` and `/metrics`; OpenClaw then reconciles them
+(`AC-AUTONOMY-CEILING` / `AC-AUTHZ-MODEL` → PASS). That's the whole thesis, observable on
+`127.0.0.1`. Reproduce it: [docs/runbook.md](docs/runbook.md#live-enforcement-demo).
 
 ## Quickstart
 
@@ -117,8 +173,7 @@ and current-vs-planned status:
 python -m venv venv && source venv/bin/activate
 make install                       # runtime deps (Apple Silicon / MLX)
 cp .env.example .env               # set PRIVATE_AI_AUTH_TOKEN
-make start                         # launch Flask + nginx
-make status
+make start && make status          # launch Flask + nginx (loopback)
 
 curl -s http://127.0.0.1:8081/v1/models \
   -H "Authorization: Bearer $PRIVATE_AI_AUTH_TOKEN" | python3 -m json.tool
@@ -126,48 +181,39 @@ curl -s http://127.0.0.1:8081/v1/models \
 make stop
 ```
 
+With no policy file the gateway runs single-principal (owner, all models) so local dev is
+zero-config. Drop in `config/policy.toml` to enable the per-principal ceilings shown above.
+
+## Documentation
+
+| Doc | What it covers |
+|---|---|
+| [Architecture](docs/architecture.md) | request path, planes, model routing |
+| [Security model](docs/security-model.md) | trust boundaries, OWASP-LLM/ATLAS framing, honest limits |
+| [**Threat model**](docs/threat-model.md) | STRIDE per trust boundary → control → the eval that proves it |
+| [Orchestration](docs/orchestration.md) | the control plane, autonomy ladder, closed loop |
+| [Runbook](docs/runbook.md) | operating the stack + the live enforcement demo |
+| [Roadmap](docs/roadmap.md) | what's hardened, what's next |
+
 ## Project layout
 
 ```text
-src/private_ai_gateway/   # gateway (app.py) + governance (policy, ratelimit, guardrails, metrics, audit)
+src/private_ai_gateway/   # gateway (app.py) + governance (policy, ratelimit, guardrails, metrics, audit, autonomy)
 config/                   # policy.example.toml — governance policy-as-code
 deploy/nginx/             # nginx loopback reverse-proxy config
-scripts/                  # operational entrypoints (start/stop/status/benchmark)
-agents/                   # orchestration components: hermes/ (stateful planner), opencode_sandbox/ (isolated reviewer + approval-gated apply), openclaw/ (assurance verifier), wrappers/ (owner-run, least-privilege)
-evals/                    # adversarial security evals (attack the enforced controls; OWASP-LLM tagged)
+agents/                   # control plane: hermes/ (planner), opencode_sandbox/ (reviewer + gated apply), openclaw/ (assurance)
+evals/                    # adversarial security evals — attack the controls, OWASP-LLM tagged
 tests/                    # unit/ (pytest) + integration/ (stack smoke test)
-docs/                     # architecture, security model, orchestration, runbook, roadmap
+docs/                     # architecture, security & threat model, orchestration, runbook, roadmap
 ```
 
-## Security
+## Status & limitations (honest)
 
-Fail-closed bearer auth (constant-time), policy-as-code identity & authorization, per-principal
-rate limiting, secret-egress guardrails, output sanitization, per-principal token caps,
-request-size limits, loopback-only binding, and a structured decision audit. Tool execution is
-intentionally **not** trusted.
-
-These controls are not just asserted — they are **attacked**. The adversarial eval harness
-([`evals/`](evals)) drives the gateway with attack-shaped inputs (autonomy-ceiling bypass,
-model-allowlist evasion, fail-closed auth, rate-limit exhaustion, secret egress), tagged by
-OWASP LLM risk, and fails CI if any control regresses. It has already caught and fixed a real
-autonomy-bypass (a request declaring a low level in the header while smuggling a higher one in
-the body). See [SECURITY.md](SECURITY.md) and [docs/security-model.md](docs/security-model.md).
-
-## Development
-
-```bash
-make install-dev
-make lint        # ruff
-make test        # pytest (MLX-dependent tests auto-skip off Apple Silicon)
-```
-
-## Status & limitations
-
-- Gateway is text-compatible, not real tool-execution-compatible (by design).
-- TLS is planned, not active; the gateway is intended for loopback use.
-- MLX is Apple-Silicon only.
-
-See [docs/roadmap.md](docs/roadmap.md) for direction.
+- Gateway is **text-compatible, not tool-execution-compatible** — by design; it refuses to fake tool calls.
+- Autonomy/egress gating is **opt-in via policy**; with no policy file the owner token is all-models break-glass.
+- Guardrails are high-precision **regex denylists** (defense-in-depth, not exhaustive recall).
+- API keys are **static** (no rotation/expiry yet); rate limiting is **in-process, per-node**.
+- **No TLS** — loopback use only. **MLX is Apple-Silicon only.**
 
 ## License
 

@@ -4,6 +4,38 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Showcase website** (`site/`) deployed to **GitHub Pages** via the official Actions
+  pipeline (`.github/workflows/pages.yml`; no `gh-pages` branch, no build step). Hand-authored,
+  zero-build, responsive dark UI using modern CSS (scroll-driven reveals, `:has()`,
+  `color-mix()`, fluid `clamp()` type, glass nav) with full `prefers-reduced-motion` and
+  keyboard/a11y support. The enforcement gauntlet is on-brand CSS; the control-plane loop is a
+  pre-rendered SVG (no runtime diagram dependency); the live `enforce.gif` is the centerpiece.
+
+### Changed
+- **CI hardened to match local strictness.** `ruff` and `bandit` now scan `agents/` and `evals/`
+  (not just `src`), bandit uses `-c pyproject.toml` (keeping the intentionally-vulnerable review
+  fixture excluded), and the coverage floor was raised **70% → 85%** (actual 93%). A reviewer
+  running `make check` no longer out-checks CI.
+- **Documentation showcase overhaul** (no code changes). Replaced the ASCII diagrams with
+  GitHub-native **Mermaid** (auto dark/light, no binary assets): a request-enforcement
+  flowchart showing every gate and its deny code, the plane/trust-boundary layering, the
+  autonomy ladder with each component pinned to its ceiling, the delegation flow, and the
+  closed plan → act → verify → record loop.
+- Rebuilt the README around a *proven-not-asserted* table (each control → the attack it
+  repels → where it's enforced → the eval/test that proves it) and a live-demo hero.
+
+### Added
+- **`docs/threat-model.md`** — a STRIDE-per-trust-boundary threat model where every
+  mitigation cites the executable proof (eval ID or unit test) that runs in CI, so the
+  document cannot silently drift from the code.
+- **Animated live-enforcement demo** — `demo/enforce.tape` (VHS) records the `403`
+  autonomy/model denials and OpenClaw's re-verification on a live gateway into
+  `docs/assets/enforce.gif`; the README also carries a static text fallback. A
+  "Live enforcement demo" runbook section documents reproducing and regenerating it.
+
 ## [0.12.0] - 2026-06-29
 
 ### Added

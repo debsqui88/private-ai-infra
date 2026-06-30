@@ -9,53 +9,68 @@ than wired directly into tool execution.
 
 ## Request path
 
-```text
-OpenAI-compatible client (SDK or agent CLI)
-  -> http://127.0.0.1:8081/v1        nginx loopback boundary   deploy/nginx/nginx.conf
-  -> http://127.0.0.1:8080/v1        Flask gateway             src/private_ai_gateway/app.py
-  -> MLX / mlx_lm                     local inference           Apple Silicon
-  -> local model                     mlx-community/*
+```mermaid
+flowchart LR
+    CLI["OpenAI-compatible client<br/><sub>SDK · agent CLI · curl</sub>"]
+    NG["nginx&nbsp;:8081<br/><sub>loopback boundary</sub>"]
+    FL["Flask gateway&nbsp;:8080<br/><sub>governance + API</sub>"]
+    MLX["MLX / mlx_lm<br/><sub>local inference</sub>"]
+    MOD["local model<br/><sub>mlx-community/*</sub>"]
+    CLI -->|"127.0.0.1:8081/v1"| NG -->|"127.0.0.1:8080/v1"| FL --> MLX --> MOD
+    classDef b fill:#0969da,stroke:#0a3069,color:#fff;
+    class NG b;
 ```
+
+`deploy/nginx/nginx.conf` → `src/private_ai_gateway/app.py` → Apple Silicon. Nothing
+binds beyond `127.0.0.1`.
 
 ## Planes
 
 The system separates *deciding what to do* from *doing it* — the boundary that keeps a
-local model from silently gaining execution authority.
+local model from silently gaining execution authority. Each plane is a distinct layer
+with its own responsibility:
 
-```text
-Control plane
-  - any OpenAI-compatible client (agent CLI, SDK, curl)
-  - planning, review, drafting — text only
-  - no trusted tool execution through the gateway
+```mermaid
+flowchart TB
+    subgraph CP["🧩 Control plane — text only, no trusted execution"]
+      direction LR
+      CP1["agent CLI · SDK · curl"]
+      CP2["planning · review · drafting"]
+    end
 
-Governance plane  (src/private_ai_gateway/{policy,ratelimit,guardrails,metrics,audit}.py)
-  - policy-as-code: principals (API-key identities) from config/policy.toml
-  - identity (token -> principal) and authorization (model allowlist, token caps)
-  - autonomy ceiling enforcement (L0-L6 ladder -> 403 autonomy_exceeded)
-  - per-principal rate limiting (token bucket -> 429 + Retry-After)
-  - secret-egress guardrails (redact/block credential-shaped output)
-  - structured decision audit (logs/decisions.jsonl)
-  - observability: Prometheus /metrics + /v1/whoami introspection
+    subgraph GP["🛡️ Governance plane — src/private_ai_gateway/{policy,autonomy,ratelimit,guardrails,metrics,audit}.py"]
+      direction LR
+      GP1["identity + authz<br/><sub>principals, model allowlist, token caps</sub>"]
+      GP2["autonomy ceiling<br/><sub>L0–L6 → 403</sub>"]
+      GP3["rate limit<br/><sub>token bucket → 429</sub>"]
+      GP4["egress guardrails<br/><sub>redact / block</sub>"]
+      GP5["decision audit + /metrics"]
+    end
 
-Gateway layer  (src/private_ai_gateway/app.py + deploy/nginx)
-  - nginx loopback boundary (127.0.0.1 only)
-  - Flask OpenAI-compatible API
-  - fail-closed bearer auth (constant-time)
-  - alias-based model routing
-  - output sanitization (thinking / tool / control markers)
-  - per-request / per-principal max-token clamp
-  - audit logging
+    subgraph GL["🌐 Gateway layer — app.py + deploy/nginx"]
+      direction LR
+      GL1["nginx loopback (127.0.0.1)"]
+      GL2["fail-closed bearer auth<br/><sub>constant-time</sub>"]
+      GL3["alias routing + output sanitizer"]
+    end
 
-Operator wrappers  (agents/wrappers/, owner-run only)
-  - opencode.sh: read-only engineering inspection + syntax tests, project-root jailed
-  - openclaw.sh: monitoring-only status / log summarization, no process control
-  - these are deliberately least-privilege; see agents/README.md
+    subgraph ML["🧠 Model layer"]
+      direction LR
+      ML1["MLX / mlx_lm"]
+      ML2["local cache · stable aliases"]
+    end
 
-Model layer
-  - MLX / mlx_lm
-  - local model cache
-  - stable aliases (clients never hardcode model names)
+    CP --> GL --> GP --> ML
+
+    classDef gov fill:#0969da,stroke:#0a3069,color:#fff;
+    class GP gov;
 ```
+
+The **operator wrappers** (`agents/wrappers/`, owner-run only) are deliberately
+least-privilege and sit outside the request path: `opencode.sh` does read-only
+engineering inspection + syntax tests inside a project-root jail; `openclaw.sh` does
+monitoring-only status/log summarization with no process control. See
+[`agents/README.md`](../agents/README.md).
 
 ## Model routing
 

@@ -43,6 +43,26 @@ if the plan asks for it.
 | L5 | continuous_auto | continuous automation |
 | L6 | unbounded | unbounded autonomy (break-glass / owner only) |
 
+Each principal is **pinned** to a ceiling. The gateway enforces it on every request, so
+no component can be handed work above its mandate — not even if the plan asks:
+
+```mermaid
+flowchart LR
+    L0["L0<br/>observe"] --> L1["L1<br/>suggest"] --> L2["L2<br/>dry_run"] --> L3["L3<br/>owner_run"] --> L4["L4<br/>monitored"] --> L5["L5<br/>continuous"] --> L6["L6<br/>unbounded"]
+    OClaw["🔍 OpenClaw"] -. pinned .-> L0
+    Herm["🧭 Hermes"] -.-> L1
+    OCrev["🛠️ OpenCode review"] -.-> L2
+    OCact["🛠️ OpenCode apply"] -.-> L3
+    Own["🔑 owner break-glass"] -.-> L6
+
+    classDef lvl fill:#161b22,stroke:#30363d,color:#c9d1d9;
+    classDef l0 fill:#0969da,stroke:#0a3069,color:#fff;
+    classDef l1 fill:#8250df,stroke:#3e1f79,color:#fff;
+    class L0,L1,L2,L3,L4,L5,L6 lvl;
+    class OClaw l0;
+    class Herm l1;
+```
+
 A request declares its intended level via the `X-Autonomy-Level` header or an
 `autonomy_level` body field (`"L3"`, `"3"`, or `3` are accepted). The gateway compares
 it to the principal's ceiling (`max_autonomy_level`, else the `[autonomy]`
@@ -56,24 +76,28 @@ code*.
 
 ## Delegation flow
 
-```text
-objective
-  │
-  ▼
-Hermes (plan)  ── decomposes into sub-tasks, each tagged with a required autonomy level
-  │
-  ▼  delegate sub-task as a sub-task principal, X-Autonomy-Level: Ln
-gateway / governance plane
-  ├─ identity        who is this principal?            (policy.py)
-  ├─ authorization   may it use the requested model?   (403 model_not_allowed)
-  ├─ autonomy        is Ln ≤ its ceiling?              (403 autonomy_exceeded)
-  ├─ rate limit      within its budget?                (429 + Retry-After)
-  ├─ inference       run the model
-  ├─ guardrails      scan response for secret egress   (redact / block)
-  └─ decision audit  append allow/deny/filter to logs/decisions.jsonl
-  │
-  ▼
-OpenCode (sandboxed exec)  /  OpenClaw (security + telemetry)
+```mermaid
+flowchart TB
+    OBJ(["objective"]) --> H["🧭 Hermes — plan<br/><sub>decompose into sub-tasks, each tagged with a required autonomy level</sub>"]
+    H -->|"delegate as sub-task principal · X-Autonomy-Level: Ln"| GW
+
+    subgraph GW["gateway / governance plane"]
+      direction TB
+      ID["identity — who is this principal? (policy.py)"]
+      AZ["authorization — may it use the requested model? → 403 model_not_allowed"]
+      AU["autonomy — is Ln ≤ its ceiling? → 403 autonomy_exceeded"]
+      RL["rate limit — within budget? → 429 + Retry-After"]
+      IN["inference — run the model"]
+      GR["guardrails — scan response for secret egress → redact / block"]
+      AD[("decision audit — append allow/deny/filter to logs/decisions.jsonl")]
+      ID --> AZ --> AU --> RL --> IN --> GR --> AD
+    end
+
+    GW --> EXEC["🛠️ OpenCode<br/><sub>sandboxed review + gated apply</sub>"]
+    GW --> SEC["🔍 OpenClaw<br/><sub>assurance + telemetry</sub>"]
+
+    classDef store fill:#9a6700,stroke:#633c01,color:#fff;
+    class AD store;
 ```
 
 Every delegation is an *authorization decision*, and every decision is recorded. The
@@ -108,8 +132,9 @@ Honesty about the boundary is part of the design.
 - **OpenClaw runs as a read-only assurance verifier.** The component at
   [`agents/openclaw/`](../agents/openclaw) reads the evidence the plane already emits — the
   decision audit, the `/metrics` counters, OpenCode's isolation manifests, and the policy — and
-  runs a set of controls over it (`AC-AUDIT-INTEGRITY`, `AC-AUTONOMY-CEILING`, `AC-AUTHZ-MODEL`,
-  `AC-RATELIMIT`, `AC-GUARDRAIL-EGRESS`, `AC-METRICS-RECONCILE`, `AC-OPENCODE-ISOLATION`). It
+  runs **nine** controls over it (`AC-AUDIT-INTEGRITY`, `AC-AUTONOMY-CEILING`, `AC-AUTHZ-MODEL`,
+  `AC-RATELIMIT`, `AC-GUARDRAIL-EGRESS`, `AC-METRICS-RECONCILE`, `AC-OPENCODE-ISOLATION`,
+  `AC-APPLY-INTEGRITY`, `AC-SECURITY-EVALS`). It
   emits a structured **assurance report** (PASS / FAIL / INCONCLUSIVE per control) and exits
   non-zero only on FAIL. It runs **observe-only (autonomy L0)**: it reconciles independent
   evidence streams and surfaces gaps, but it changes nothing and has no authority to clear its
@@ -123,10 +148,24 @@ Honesty about the boundary is part of the design.
   control appears in Hermes' planning prompt and, by contract, gates new work until it is fixed.
   The two leaf packages stay decoupled: they meet only at a small JSON assurance record, not at
   each other's types.
+- **The act step is enforced too.** OpenCode's apply path
+  ([`agents/opencode_sandbox/apply.py`](../agents/opencode_sandbox/apply.py)) refuses any change
+  without an explicit owner approval (fail-closed, ≥ L3, no under-declaring), applies only into a
+  sandbox copy, and verifies via sha256 manifests that it changed *exactly* the files it declared.
+  The resulting apply report is folded into OpenClaw's `AC-APPLY-INTEGRITY` control, so an ungated
+  or escaping apply becomes a failing control that gates the next plan. Likewise the adversarial
+  eval verdict (`evals/`) feeds `AC-SECURITY-EVALS`. The loop is closed on all four threads
+  (plan → act → verify → record):
 
-```text
-Hermes plan ──▶ (owner / OpenCode act) ──▶ OpenClaw verify ──▶ record to Hermes memory ──▶ re-plan
-        └──────────────────────── plan from verified state ───────────────────────────────┘
+```mermaid
+flowchart LR
+    P["🧭 plan<br/><sub>Hermes · L1</sub>"] --> A["🛠️ act<br/><sub>OpenCode · approval-gated, confined</sub>"]
+    A --> V["🔍 verify<br/><sub>OpenClaw · L0 read-only</sub>"]
+    V --> R[("🧠 record<br/><sub>Hermes memory</sub>")]
+    R -.->|"plan from verified state · a failing control gates new work"| P
+    EV["⚔️ evals"] --> V
+    classDef store fill:#9a6700,stroke:#633c01,color:#fff;
+    class R store;
 ```
 
 **Planned (next, behind the same boundary):**
@@ -134,10 +173,11 @@ Hermes plan ──▶ (owner / OpenCode act) ──▶ OpenClaw verify ──▶
 - **OpenClaw probes:** add model-driven offensive-security / code-review checks for the
   `openclaw` principal (its `allowed_models` / L0 ceiling already exist in policy), on top of
   today's evidence-verification controls.
-- **OpenCode** OS-level hardening: additionally run the existing capability-denied harness
-  under a kernel jail (seccomp/namespaces) and add an approval-gated apply path — the **act**
-  step of the loop above.
-- Approval gates (`APPROVAL REQUIRED`) for any L4+ action, surfaced to the owner.
+- **OpenCode OS-level jail:** additionally run the capability-denied review *and* the apply step
+  under a kernel jail (seccomp/namespaces / `sandbox-exec`). The protocol-level gate and
+  filesystem verification are done; the remaining hardening is the OS boundary.
+- Approval gates (`APPROVAL REQUIRED`) for any L4+ *gateway* action, reusing the act step's
+  approval model, surfaced to the owner.
 
 See [roadmap.md](roadmap.md) for sequencing. All three components now have running
 implementations: [`agents/hermes/`](../agents/hermes) (planner + verification loop),

@@ -97,6 +97,62 @@ Expected:
 - gateway_requests_total, gateway_authz_denials_total, gateway_rate_limited_total, and
   gateway_guardrail_events_total counters are present
 
+## Live enforcement demo
+
+Demonstrates the core thesis on the wire: a principal capped at autonomy **L1** with
+models `["strategy"]` is refused `403` the moment it asks for more — *before* any model
+loads. This is what [`demo/enforce.tape`](../demo/enforce.tape) records into the README GIF.
+
+**1. Enable a policy with a restricted principal.** Generate a demo key and its hash:
+
+```bash
+printf '%s' 'hermes-demo-key-001' | shasum -a 256     # -> put the hash in config/policy.toml
+```
+
+Add it to `config/policy.toml` (gitignored; copy from `config/policy.example.toml`):
+
+```toml
+[[principals]]
+name = "hermes"
+key_sha256 = "<hash from above>"
+allowed_models = ["strategy"]
+max_autonomy_level = "L1"
+```
+
+**2. Start the stack and exercise the ceilings:**
+
+```bash
+make start
+H='Authorization: Bearer hermes-demo-key-001'
+
+# (a) declares L6 — more autonomy than its mandate  -> 403 autonomy_exceeded
+curl -s :8081/v1/chat/completions -H "$H" -H 'X-Autonomy-Level: 6' \
+  -d '{"model":"strategy","messages":[{"role":"user","content":"hi"}]}' -w '\nHTTP %{http_code}\n'
+
+# (b) requests a model outside its allowlist            -> 403 model_not_allowed
+curl -s :8081/v1/chat/completions -H "$H" \
+  -d '{"model":"offsec","messages":[{"role":"user","content":"hi"}]}' -w '\nHTTP %{http_code}\n'
+
+# (c) under-declares: header L1, body L6 (smuggle)      -> 403 (most-privileged-wins)
+curl -s :8081/v1/chat/completions -H "$H" -H 'X-Autonomy-Level: 1' \
+  -d '{"model":"strategy","autonomy_level":6,"messages":[{"role":"user","content":"hi"}]}' -w '\nHTTP %{http_code}\n'
+```
+
+**3. Confirm the loop closed — the denials are audited and independently re-verified:**
+
+```bash
+PYTHONPATH=agents python -m openclaw.run --audit logs/decisions.jsonl --policy config/policy.toml \
+  | grep -E 'verdict|AUTONOMY-CEILING|AUTHZ-MODEL'      # -> PASS
+make stop
+```
+
+**Regenerate the README GIF** (requires `vhs`: `brew install vhs`) while the stack from
+step 2 is running:
+
+```bash
+vhs demo/enforce.tape       # writes docs/assets/enforce.gif
+```
+
 ## Strategy Benchmark
 
 Run:

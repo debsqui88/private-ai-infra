@@ -18,7 +18,24 @@ fake tool-calls, control tokens), per-model max-token clamping, and audit loggin
 - TLS material (`certs/`), model caches (`model_cache/`), the virtualenv (`venv/`), and
   runtime logs (`logs/`) are git-ignored and must never be committed.
 
+## Repository protections
+
+Controls on the repository itself (industry-standard for a single-maintainer public repo):
+
+- **Protected default branch (`main`)** via a ruleset — branch **deletion** and **force-push
+  (non-fast-forward)** are blocked, every change must arrive through a **pull request**, and
+  required status checks (`lint-and-scan`, `test`) must pass before merge.
+- **Secret scanning + push protection** block credential-shaped commits before they land.
+- **Dependabot** vulnerability alerts and automated security updates are enabled.
+- **Least-privilege CI** — the default `GITHUB_TOKEN` is read-only and workflows cannot
+  approve pull requests. CI runs `ruff`, `bandit` (SAST), and `pip-audit` on every push/PR;
+  CodeQL analyzes the code separately.
+
+The gateway's own trust boundaries plus a **MITRE ATLAS / OWASP technique map** (pertinent vs.
+out-of-scope) are in [docs/security-model.md](docs/security-model.md).
+
 ## Reporting a vulnerability
 
-Open a private security advisory on GitHub. Please do not file public issues for
-security reports.
+Use **GitHub → Security → Report a vulnerability** (private vulnerability reporting). Please
+do not file public issues for security reports. This is a portfolio/research repo — there is
+no bounty.

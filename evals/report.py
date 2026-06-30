@@ -53,6 +53,7 @@ class EvalReport:
                     "id": r.case.id,
                     "category": r.case.category,
                     "owasp": r.case.owasp,
+                    "atlas": r.case.atlas,
                     "attack": r.case.attack,
                     "expectation": r.case.expectation,
                     "status": r.status,

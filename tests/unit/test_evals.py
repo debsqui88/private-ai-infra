@@ -91,6 +91,13 @@ def test_agentic_cases_wired_and_memory_poisoning_probe_holds():
     ids = {c.id for c in ALL_CASES}
     assert {"AGENTIC-001", "AGENTIC-002", "AGENTIC-003"} <= ids
 
+    # the agentic + egress probes are tagged to MITRE ATLAS techniques (AML.T####),
+    # so the suite reports OWASP *and* ATLAS coverage
+    by_id = {c.id: c for c in ALL_CASES}
+    assert by_id["AGENTIC-001"].atlas.startswith("AML.T0051.001")
+    assert by_id["AGENTIC-002"].atlas.startswith("AML.T0051.000")
+    assert by_id["EGRESS-001"].atlas.startswith("AML.T0057")
+
     # the memory/context-poisoning exfil probe is egress-only, so it runs everywhere
     # (incl. Linux CI): a captured model still cannot push a secret past the guardrail.
     egress_agentic = [c for c in AGENTIC_CASES if not c.needs_gateway]
@@ -116,6 +123,8 @@ def test_report_json_is_serializable_and_tagged():
     data = json.loads(report.to_json())
     assert data["verdict"] == "PASS"
     assert data["results"][0]["owasp"] == "LLM06"
+    # every result carries an ATLAS slot (empty where no technique maps)
+    assert "atlas" in data["results"][0]
     assert data["results"][0]["status"] == PASS
 
 

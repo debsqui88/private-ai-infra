@@ -97,6 +97,7 @@ class EvalCase:
     run: Callable[[Context], Observation]
     check: Callable[[Observation], bool]
     needs_gateway: bool = True  # request-level (vs. egress, which needs only guardrails)
+    atlas: str = ""  # the MITRE ATLAS technique it exercises (AML.T####), where one maps
 
 
 @dataclass

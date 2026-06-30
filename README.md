@@ -6,15 +6,17 @@
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-> **A local-first AI governance plane for Apple Silicon (MLX).** An OpenAI-compatible
-> gateway that mediates access to local models with **policy-as-code identity,
-> authorization, an enforced autonomy ceiling, output guardrails, and a structured
-> decision audit** — behind an nginx loopback boundary.
+> ## AI capability is not AI authority.
 >
-> The thesis: **AI capability is not AI authority.** The value isn't that a model runs
-> locally — it's the enforceable control boundary around it. A leaked low-privilege key
-> can't reach a model it was never granted; a planner capped at "suggest" can't be
-> handed work that "executes" — and every allow/deny is recorded.
+> A **local-first AI governance plane** for Apple Silicon (MLX): an OpenAI-compatible
+> gateway that mediates every call to a local model — **policy-as-code identity, model
+> authorization, an enforced L0–L6 autonomy ceiling, egress guardrails, and a structured
+> decision audit**, behind an nginx loopback boundary.
+>
+> A leaked low-privilege key can't reach a model it was never granted; an agent capped at
+> *suggest* can't be handed work that *executes*. Enforced in code, **before any model
+> loads** — not asserted in a README — with every allow/deny recorded and independently
+> re-verified.
 
 <!-- DEMO: regenerate with `vhs demo/enforce.tape` -->
 <p align="center">

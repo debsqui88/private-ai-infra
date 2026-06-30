@@ -7,6 +7,17 @@ All notable changes to this project are documented here. Format based on
 ## [Unreleased]
 
 ### Added
+- **MITRE ATLAS technique mapping** — eval cases now carry a MITRE ATLAS technique ID
+  (`AML.T0051.000/.001` prompt injection, `AML.T0057` data leakage) surfaced in the report
+  JSON, and `docs/security-model.md` gains a concrete ATLAS coverage table plus an explicit
+  **out-of-scope analysis** (why training-data poisoning, model extraction, and adversarial-
+  example evasion don't apply to a pre-trained, loopback, text-only authority plane).
+- **Profile photo support** on the author page — the avatar shows a photo
+  (`site/assets/profile.jpg`) when present and falls back to the gradient monogram otherwise.
+- **Repository security hardening** — `main` protected by a ruleset (no deletion, no
+  force-push, PR-required, `lint-and-scan`+`test` must pass); Dependabot alerts + security
+  updates enabled; `SECURITY.md` documents the posture. (Secret scanning, push protection,
+  and a read-only CI token were already on.)
 - **Agentic threat-model evals** (`AGENTIC-001/002/003`) — a black-box-attacker group that
   assumes the model is already captured by prompt-injection / context-poisoning and proves the
   authority boundary still holds: a hijacked model cannot reach an ungranted model (ASI01),

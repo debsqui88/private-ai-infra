@@ -20,6 +20,36 @@ below.
 
 ## Trust boundaries
 
+Controls are layered (defense in depth): an attacker must cross every ring, and each ring
+fails closed and is logged. The diagram shows where each boundary sits relative to the
+untrusted client and the model:
+
+```mermaid
+flowchart TB
+    ATK(["🌐 untrusted client / network"])
+
+    subgraph R1["① loopback — 127.0.0.1 only"]
+      subgraph R2["② fail-closed auth + identity"]
+        subgraph R3["③ authorization — model allowlist · autonomy ceiling · rate limit · token caps"]
+          subgraph R4["④ egress guardrails — scan output for secrets"]
+            MODEL["🧠 local model<br/><sub>MLX</sub>"]
+          end
+        end
+      end
+    end
+
+    ATK -->|"bearer token"| R1
+    AUD[("📋 every crossing → decision audit + /metrics<br/><sub>Authorization header never logged</sub>")]
+    R2 -.-> AUD
+    R3 -.-> AUD
+    R4 -.-> AUD
+
+    classDef ring fill:#0d1117,stroke:#1f6feb,color:#c9d1d9;
+    classDef store fill:#9a6700,stroke:#633c01,color:#fff;
+    class R1,R2,R3,R4 ring;
+    class AUD store;
+```
+
 | Boundary | Control | Status |
 |---|---|---|
 | Network | bind to `127.0.0.1` only (Flask + nginx) | active |

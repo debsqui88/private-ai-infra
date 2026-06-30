@@ -191,7 +191,7 @@ zero-config. Drop in `config/policy.toml` to enable the per-principal ceilings s
 | Doc | What it covers |
 |---|---|
 | [Architecture](docs/architecture.md) | request path, planes, model routing |
-| [Security model](docs/security-model.md) | trust boundaries, OWASP-LLM/ATLAS framing, honest limits |
+| [Security model](docs/security-model.md) | trust boundaries, OWASP-LLM risks + a **MITRE ATLAS technique map** (pertinent vs. out-of-scope), honest limits |
 | [**Threat model**](docs/threat-model.md) | STRIDE per trust boundary → control → the eval that proves it |
 | [Orchestration](docs/orchestration.md) | the control plane, autonomy ladder, closed loop |
 | [Runbook](docs/runbook.md) | operating the stack + the live enforcement demo |

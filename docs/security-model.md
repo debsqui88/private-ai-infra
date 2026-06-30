@@ -91,8 +91,50 @@ This gateway targets a focused subset rather than claiming broad coverage:
 - **Unbounded autonomy** — there is no agent loop in the gateway; the operator runs
   deterministic commands.
 
-ATLAS-style: the design assumes the model may attempt to emit
-adversarial/agentic output and contains it at the boundary rather than trusting it.
+## MITRE ATLAS technique coverage
+
+Where OWASP frames the *risk*, [MITRE ATLAS](https://atlas.mitre.org/) (adversarial ML
+ATT&CK, v5.4.0) frames the *adversary technique* — and the project's stance is the same
+either way: assume the technique lands on the model, and contain its effect at the
+identity boundary. Only techniques that are **actually reachable on this architecture** are
+listed; the out-of-scope set below is the more important half of the analysis.
+
+| ATLAS technique | Tactic | What this project does about it | Status | Proven by |
+|---|---|---|---|---|
+| **AML.T0051.000** LLM Prompt Injection: Direct | Initial Access | a hijacked model still can't exceed its model allowlist or autonomy ceiling; tool exec is refused | bounds | `AGENTIC-002` · sanitizer |
+| **AML.T0051.001** LLM Prompt Injection: Indirect | Initial Access | a poisoned tool/RAG result can't switch the model or raise autonomy — authority is off the prompt path | bounds | `AGENTIC-001` |
+| **AML.T0054** LLM Jailbreak | Defense Evasion | jailbreak changes what the model *says*, never what its principal is *authorized* to reach | bounds | `AUTHZ-001` · `AUTONOMY-*` |
+| **AML.T0057** LLM Data Leakage | Exfiltration | egress guardrail redacts credential-shaped output before it leaves the gateway | partial | `EGRESS-001…004` · `AGENTIC-003` |
+| **AML.T0024** Exfiltration via AI Inference API | Exfiltration | fail-closed auth + per-principal rate limits bound API-abuse extraction; egress scan on the way out | partial | `AUTHN-*` · `RATELIMIT-001` |
+| **AML.T0086** Exfiltration via AI Agent Tool Invocation | Exfiltration | the gateway performs no tool execution; the OpenCode apply path is approval-gated and sandbox-confined | partial | `AC-APPLY-INTEGRITY` |
+| **AML.T0110** AI Agent Tool Poisoning | Persistence | OpenCode reviews a *copy*, sha256-verified to touch only declared files; no third-party tool marketplace | partial | `AC-OPENCODE-ISOLATION` |
+| **AML.T0043** Craft Adversarial Data | AI Attack Staging | the adversarial eval suite *crafts these on purpose* and fails CI if a control regresses | exercised | `evals/` |
+
+The eval cases carry the ATLAS technique ID in their report output (`atlas` field), so the
+OWASP ↔ ATLAS mapping is executable, not just narrated.
+
+### Out of scope — and why (critical analysis)
+
+A framework is only useful if you say honestly where it *doesn't* apply. These ATLAS
+techniques are **not pertinent** to this project as built, and claiming them would be theatre:
+
+- **AML.T0020 Poison Training Data · backdoor/poison a trained model** — the gateway serves a
+  **pre-trained** local model and never trains or fine-tunes, so there is no training pipeline
+  to poison. *(The one related surface — Hermes agent memory / future RAG — is addressed
+  separately by the tamper-evident-memory item on the roadmap, not here.)*
+- **Model extraction / stealing (reconstruct weights via mass queries)** — single-user,
+  loopback-only, with the model file already local; there is no remote model-theft threat.
+  Rate limiting raises query cost incidentally, but defending model IP is not a design goal.
+- **Evade AI Model / adversarial examples** — there is no classifier or CV/decision model to
+  evade; this is a text inference gateway, so perturbation attacks on a decision boundary
+  don't apply.
+- **ML supply-chain compromise (poisoned public model artifacts)** — *partially* covered:
+  `pip-audit` / `bandit` / CodeQL gate the dependency supply chain in CI, but model-artifact
+  provenance (sigstore/cosign signing) is roadmapped, not done — so it is listed as a gap,
+  not a win.
+
+The common thread: this is an **authority/containment** plane, not a model-integrity or
+model-IP product, and the ATLAS mapping is scoped to match.
 
 ## Limitations and non-goals (read this)
 

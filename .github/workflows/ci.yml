@@ -17,10 +17,10 @@ jobs:
         run: pip install ruff bandit pip-audit
 
       - name: Ruff lint
-        run: ruff check src tests
+        run: ruff check src tests agents/hermes agents/openclaw agents/opencode_sandbox evals
 
       - name: Bandit (Python SAST)
-        run: bandit -r src -q
+        run: bandit -c pyproject.toml -r src agents/hermes agents/openclaw agents/opencode_sandbox evals -q
 
       - name: pip-audit (dependency CVEs)
         run: pip-audit -r requirements.txt
@@ -46,4 +46,4 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Tests with coverage
-        run: pytest --cov=private_ai_gateway --cov-report=term-missing --cov-fail-under=70
+        run: pytest --cov=private_ai_gateway --cov=hermes --cov=openclaw --cov=opencode_sandbox --cov=evals --cov-report=term-missing --cov-fail-under=85

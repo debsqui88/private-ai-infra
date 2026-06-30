@@ -24,8 +24,8 @@ status: ## Show stack status
 test: ## Run unit tests
 	pytest
 
-cov: ## Run tests with coverage (fails under 70%)
-	pytest --cov=private_ai_gateway --cov=hermes --cov=openclaw --cov=opencode_sandbox --cov=evals --cov-report=term-missing --cov-fail-under=70
+cov: ## Run tests with coverage (fails under 85%)
+	pytest --cov=private_ai_gateway --cov=hermes --cov=openclaw --cov=opencode_sandbox --cov=evals --cov-report=term-missing --cov-fail-under=85
 
 lint: ## Lint with ruff
 	ruff check src tests agents/hermes agents/openclaw agents/opencode_sandbox evals

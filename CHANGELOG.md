@@ -6,7 +6,19 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+### Added
+- **Showcase website** (`site/`) deployed to **GitHub Pages** via the official Actions
+  pipeline (`.github/workflows/pages.yml`; no `gh-pages` branch, no build step). Hand-authored,
+  zero-build, responsive dark UI using modern CSS (scroll-driven reveals, `:has()`,
+  `color-mix()`, fluid `clamp()` type, glass nav) with full `prefers-reduced-motion` and
+  keyboard/a11y support. The enforcement gauntlet is on-brand CSS; the control-plane loop is a
+  pre-rendered SVG (no runtime diagram dependency); the live `enforce.gif` is the centerpiece.
+
 ### Changed
+- **CI hardened to match local strictness.** `ruff` and `bandit` now scan `agents/` and `evals/`
+  (not just `src`), bandit uses `-c pyproject.toml` (keeping the intentionally-vulnerable review
+  fixture excluded), and the coverage floor was raised **70% → 85%** (actual 93%). A reviewer
+  running `make check` no longer out-checks CI.
 - **Documentation showcase overhaul** (no code changes). Replaced the ASCII diagrams with
   GitHub-native **Mermaid** (auto dark/light, no binary assets): a request-enforcement
   flowchart showing every gate and its deny code, the plane/trust-boundary layering, the

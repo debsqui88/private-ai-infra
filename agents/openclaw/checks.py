@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from openclaw.evidence import (
     AuditLog,
+    EvalReportView,
     IsolationReport,
     MetricSet,
     PolicyView,
@@ -49,6 +50,7 @@ class Evidence:
     metrics: MetricSet | None = None
     policy: PolicyView | None = None
     isolation: IsolationReport | None = None
+    eval_report: EvalReportView | None = None
 
 
 # --------------------------------------------------------------------- AC-AUDIT-INTEGRITY
@@ -303,6 +305,46 @@ def check_opencode_isolation(ev: Evidence) -> Finding:
     )
 
 
+# ---------------------------------------------------------------- AC-SECURITY-EVALS
+def check_security_evals(ev: Evidence) -> Finding:
+    cid, title = "AC-SECURITY-EVALS", "Adversarial security evals held"
+    rep = ev.eval_report
+    if rep is None:
+        return Finding(
+            cid, title, INCONCLUSIVE, "info",
+            "No security-eval report supplied — the adversarial suite was not folded into "
+            "this assurance pass, so there is no evidence the enforced controls actually "
+            "repel attack (absence of a report is not proof the controls hold).",
+        )
+    if rep.malformed:
+        return Finding(
+            cid, title, FAIL, "high",
+            "the security-eval report could not be parsed or was missing its verdict/counts. "
+            "An unreadable assurance artifact is itself an integrity gap — fail closed.",
+            evidence=[rep.source],
+        )
+    if rep.verdict == "FAIL" or rep.failed > 0:
+        sample = "; ".join(rep.failed_probes[:5]) or f"{rep.failed} probe(s)"
+        return Finding(
+            cid, title, FAIL, "high",
+            f"the adversarial security suite reported {rep.failed} failing probe(s) — a "
+            f"governance control let an attack through: {sample}. New work is gated until "
+            "the control is restored.",
+            evidence=[rep.source],
+        )
+    if rep.passed == 0:
+        return Finding(
+            cid, title, INCONCLUSIVE, "info",
+            f"the security-eval report drove no probe to a verdict ({rep.skipped} skipped) — "
+            "no attack was actually exercised, so enforcement is unverified here.",
+            evidence=[rep.source],
+        )
+    detail = f"all {rep.passed} adversarial probe(s) were repelled (verdict {rep.verdict})"
+    if rep.skipped:
+        detail += f"; {rep.skipped} probe(s) skipped — a coverage gap, not a failure"
+    return Finding(cid, title, PASS, "info", detail + ".", evidence=[rep.source])
+
+
 ALL_CHECKS = [
     check_audit_integrity,
     check_autonomy_ceiling,
@@ -311,6 +353,7 @@ ALL_CHECKS = [
     check_guardrail_egress,
     check_metrics_reconcile,
     check_opencode_isolation,
+    check_security_evals,
 ]
 
 

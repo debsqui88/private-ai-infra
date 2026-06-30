@@ -7,6 +7,8 @@ Pure-stdlib and offline: evidence is read from temp files, no gateway involved.
 
 from __future__ import annotations
 
+import json
+
 from hermes import planner, verify
 from hermes.store import MemoryStore
 
@@ -88,3 +90,46 @@ def test_gather_and_record_cross_checks_policy_and_isolation(tmp_path):
     assert record["verdict"] == "PASS"
     assert "AC-AUTHZ-MODEL" in record["passed_controls"]
     assert "AC-OPENCODE-ISOLATION" in record["passed_controls"]
+
+
+def _eval_report(tmp_path, verdict, *, passed, failed, probes=()):
+    results = [
+        {"id": pid, "owasp": "LLM06", "attack": atk, "status": "fail"}
+        for pid, atk in probes
+    ]
+    p = tmp_path / "evals.json"
+    p.write_text(
+        '{"component":"security-evals","generated_at":"t","verdict":"%s",'
+        '"counts":{"pass":%d,"fail":%d,"skip":0},"results":%s}'
+        % (verdict, passed, failed, json.dumps(results)),
+        encoding="utf-8",
+    )
+    return str(p)
+
+
+def test_passing_eval_report_records_as_passed_control(tmp_path):
+    record = verify.gather_and_record(
+        memory_dir=tmp_path / "mem",
+        audit=_audit(tmp_path, _CLEAN_AUDIT),
+        eval_report=_eval_report(tmp_path, "PASS", passed=12, failed=0),
+    )
+    assert record["verdict"] == "PASS"
+    assert "AC-SECURITY-EVALS" in record["passed_controls"]
+
+
+def test_failing_eval_report_gates_next_plan(tmp_path):
+    # The whole point: a control that let an attack through in the eval suite must
+    # become a failing assurance control and gate Hermes' next planning cycle.
+    mem = tmp_path / "mem"
+    record = verify.gather_and_record(
+        memory_dir=mem,
+        audit=_audit(tmp_path, _CLEAN_AUDIT),
+        eval_report=_eval_report(
+            tmp_path, "FAIL", passed=11, failed=1,
+            probes=[("AUTONOMY-004", "header L1 + body L6")],
+        ),
+    )
+    assert record["verdict"] == "FAIL"
+    assert any(c["control_id"] == "AC-SECURITY-EVALS" for c in record["failed_controls"])
+    digest = planner.summarize_state(MemoryStore(mem).load_state())
+    assert "AC-SECURITY-EVALS" in digest

@@ -6,6 +6,12 @@ All notable changes to this project are documented here. Format based on
 
 ## [0.13.0] - 2026-06-30
 
+### Changed
+- **Showcase site restructured** — the GitHub Pages root now serves the **author/profile**
+  page (`site/index.html`); the `private-ai-infra` project page moved to `project.html`.
+  All GitHub handles migrated `debsqui88` → `debshikhar-sec` (repo, Pages, badges, links,
+  résumé) after the account rename.
+
 ### Added
 - **Installable as a package** — `pip install .` registers a `private-ai-gateway` console
   command (`serve` / `version`), so the gateway runs without the Makefile or nginx

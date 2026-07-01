@@ -9,7 +9,7 @@ description = "Local-first AI governance plane: an OpenAI-compatible MLX gateway
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Debsqui" }]
+authors = [{ name = "Debshikhar Das" }]
 keywords = ["llm", "mlx", "openai-compatible", "gateway", "ai-infrastructure", "apple-silicon", "devsecops"]
 dependencies = [
     "flask==3.1.3",

@@ -1,9 +1,9 @@
 # Private AI Gateway
 
-<!-- If the GitHub slug differs from debsqui88/private-ai-infra, update it in the badge URLs below. -->
-[![Live demo](https://img.shields.io/website?url=https%3A%2F%2Fdebsqui88.github.io%2Fprivate-ai-infra%2F&up_message=online&up_color=8b5cf6&down_message=offline&label=live%20demo)](https://debsqui88.github.io/private-ai-infra/)
-[![CI](https://github.com/debsqui88/private-ai-infra/actions/workflows/ci.yml/badge.svg)](https://github.com/debsqui88/private-ai-infra/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/debsqui88/private-ai-infra/actions/workflows/codeql.yml/badge.svg)](https://github.com/debsqui88/private-ai-infra/actions/workflows/codeql.yml)
+<!-- If the GitHub slug differs from debshikhar-sec/private-ai-infra, update it in the badge URLs below. -->
+[![Live demo](https://img.shields.io/website?url=https%3A%2F%2Fdebshikhar-sec.github.io%2Fprivate-ai-infra%2F&up_message=online&up_color=8b5cf6&down_message=offline&label=live%20demo)](https://debshikhar-sec.github.io/private-ai-infra/project.html)
+[![CI](https://github.com/debshikhar-sec/private-ai-infra/actions/workflows/ci.yml/badge.svg)](https://github.com/debshikhar-sec/private-ai-infra/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/debshikhar-sec/private-ai-infra/actions/workflows/codeql.yml/badge.svg)](https://github.com/debshikhar-sec/private-ai-infra/actions/workflows/codeql.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
@@ -104,6 +104,8 @@ Each row is a control, the attack against it, and where that attack is proven to
 | Rate limiting | one key saturates the gateway | `ratelimit.py` → `429` | `evals` RATELIMIT-001 · `test_ratelimit` |
 | Secret egress | model surfaces an AWS key / JWT / PEM | `guardrails.py` redact/block | `evals` EGRESS-001…004 · `test_guardrails` |
 | **Captured-model bound** | injection / context-poisoning hijacks the model itself | authority decided **off the prompt path** | `evals` **AGENTIC-001/002/003** — OWASP Agentic ASI01/03/06 |
+| **A2A delegation** | an agent is handed a skill / autonomy beyond its mandate | `/a2a/tasks` → `403` skill_not_allowed / autonomy_exceeded | `evals` **A2A-001/002** — OWASP Agentic ASI03/07 |
+| **MCP tool access** | a principal invokes an ungranted or over-privileged tool | `/mcp/call` → `403` tool_not_allowed / autonomy_exceeded | `evals` **MCP-001** — OWASP Agentic ASI02 |
 | Apply integrity | an apply runs ungated or escapes its sandbox | `opencode_sandbox/apply.py` | OpenClaw `AC-APPLY-INTEGRITY` · `test_opencode_act` |
 
 → Run the attacks yourself: `make evals` · Re-verify the controls: `make` + see [docs/threat-model.md](docs/threat-model.md).
@@ -171,11 +173,19 @@ The denials land in `logs/decisions.jsonl` and `/metrics`; OpenClaw then reconci
 
 ## Quickstart
 
+**Install and run (loopback, no nginx):**
+
 ```bash
 python -m venv venv && source venv/bin/activate
-make install                       # runtime deps (Apple Silicon / MLX)
-cp .env.example .env               # set PRIVATE_AI_AUTH_TOKEN
-make start && make status          # launch Flask + nginx (loopback)
+pip install .                      # Apple Silicon / MLX; installs the console command
+export PRIVATE_AI_AUTH_TOKEN=...    # fail-closed: required to serve
+private-ai-gateway serve            # Flask on 127.0.0.1:8080
+```
+
+**Or the hardened loopback stack (Flask behind the nginx boundary):**
+
+```bash
+make install && cp .env.example .env && make start && make status
 
 curl -s http://127.0.0.1:8081/v1/models \
   -H "Authorization: Bearer $PRIVATE_AI_AUTH_TOKEN" | python3 -m json.tool
@@ -185,6 +195,18 @@ make stop
 
 With no policy file the gateway runs single-principal (owner, all models) so local dev is
 zero-config. Drop in `config/policy.toml` to enable the per-principal ceilings shown above.
+
+### Governed agentic surfaces (A2A + MCP)
+
+The same plane that gates inference also gates **agent-to-agent delegation** and **tool
+calls** — capability is not authority on any surface:
+
+```console
+$ curl :8080/.well-known/agent-card.json -H "$H"     # A2A discovery: skills + autonomy ceiling (from policy)
+$ curl :8080/a2a/tasks  -H "$H" -d '{"skill":"deploy.prod"}'        # 403 skill_not_allowed
+$ curl :8080/mcp/call   -H "$H" -d '{"tool":"shell.exec"}'         # 403 tool_not_allowed
+$ curl :8080/mcp/call   -H "$H" -d '{"tool":"clock.now"}'          # 200 — granted + within autonomy
+```
 
 ## Documentation
 

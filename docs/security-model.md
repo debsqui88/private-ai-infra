@@ -57,6 +57,8 @@ flowchart TB
 | Identity | bearer token resolved to a principal via policy-as-code (API-key SHA-256 hashes) | active |
 | Authorization | per-principal model allowlist; unauthorized model → 403 | active |
 | Autonomy | per-principal L0–L6 ceiling; request above ceiling → 403 `autonomy_exceeded` | active (opt-in via policy) |
+| A2A delegation | per-principal `allowed_skills`; ungranted skill → 403 `skill_not_allowed`; over-ceiling delegation → 403 `autonomy_exceeded` | active (opt-in via policy) |
+| MCP tool access | per-principal `allowed_tools` + per-tool autonomy floor; ungranted/over-privileged tool → 403 | active (opt-in via policy) |
 | Request rate | per-principal token-bucket limiter; over-limit → 429 + `Retry-After` | active |
 | Secret egress | response guardrails redact/block credential-shaped output | active (opt-in via policy) |
 | Model output | sanitizer strips thinking / tool / control markers | active (defense-in-depth) |

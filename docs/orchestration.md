@@ -104,6 +104,32 @@ Every delegation is an *authorization decision*, and every decision is recorded.
 audit trail (`logs/decisions.jsonl`) is therefore a complete record of which component
 was permitted to do what — the artifact a reviewer or SIEM actually wants.
 
+## Standards-aligned surfaces: A2A + MCP
+
+The 2026 agent stack splits into two protocols: **A2A** (Agent2Agent — *horizontal*, agent
+talks to agent) and **MCP** (Model Context Protocol — *vertical*, agent talks to tools).
+They are complementary, and the governance plane sits underneath both: the *same* identity →
+authorization → autonomy → audit pipeline gates a delegation and a tool call exactly as it
+gates inference.
+
+- **A2A.** `GET /.well-known/agent-card.json` serves an A2A Agent Card rendered **from
+  policy** — it advertises only the skills a principal is granted (`allowed_skills`) and
+  surfaces the principal's enforced **autonomy ceiling**, so a peer decides a handoff against
+  authority rather than a self-description. `POST /a2a/tasks` accepts a delegated task only if
+  the principal holds the skill and the declared level is within its ceiling, else
+  `403 skill_not_allowed` / `403 autonomy_exceeded`. This makes the Hermes → OpenCode →
+  OpenClaw handoffs a standards-shaped, governed pattern (and addresses OWASP Agentic ASI07).
+
+- **MCP.** `POST /mcp/call` gates every tool invocation by the principal's `allowed_tools`
+  *and* a per-tool autonomy floor (each tool declares the level it requires), refusing
+  ungranted or over-privileged calls before any handler runs (`403 tool_not_allowed` /
+  `403 autonomy_exceeded`). "A tool call is not authority unless granted" — the same thesis as
+  "model output is not authority" (OWASP Agentic ASI02). Built-in tools are pure/side-effect-free;
+  a high-blast-radius tool would simply carry a high autonomy floor.
+
+Both surfaces are proven by the adversarial eval suite (`A2A-001/002`, `MCP-001`) and unit
+tests, so the authority claim is enforced and regression-gated, not asserted.
+
 ## Status — what is enforced today vs. planned
 
 Honesty about the boundary is part of the design.
